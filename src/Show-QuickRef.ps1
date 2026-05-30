@@ -12,25 +12,28 @@ try { [void][Native.Dpi]::SetProcessDPIAware() } catch {}
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
-# API Win32 minimale : retrouver/fermer une instance deja ouverte (pour le toggle).
-Add-Type -TypeDefinition @'
-using System;
-using System.Runtime.InteropServices;
-public class QuickRefWin {
-    [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
-    [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
-    public const uint WM_CLOSE = 0x0010;
-}
-'@
-
 $TITLE_TAG = 'quickref-hud'
 
-# --- TOGGLE : si la fenetre existe deja, on la ferme et on sort. ---
-$existing = [QuickRefWin]::FindWindow($null, $TITLE_TAG)
-if ($existing -ne [IntPtr]::Zero) {
-    [void][QuickRefWin]::SendMessage($existing, [QuickRefWin]::WM_CLOSE, [IntPtr]::Zero, [IntPtr]::Zero)
-    return
+# --- TOGGLE via fichier PID (deterministe, inter-process) ---
+# Au lancement : si une instance tourne deja, on la ferme et on sort (toggle OFF).
+# Sinon on enregistre notre PID et on affiche la fenetre (toggle ON).
+$pidFile = Join-Path $env:TEMP 'quickref.pid'
+if (Test-Path $pidFile) {
+    $oldPid = $null
+    try { $oldPid = [int]((Get-Content $pidFile -Raw).Trim()) } catch {}
+    $alive = $false
+    if ($oldPid) {
+        $proc = Get-Process -Id $oldPid -ErrorAction SilentlyContinue
+        # Verifier que c'est bien un de nos process (powershell), pas un PID recycle.
+        if ($proc -and $proc.ProcessName -match 'powershell|pwsh') { $alive = $true }
+    }
+    Remove-Item $pidFile -Force -ErrorAction SilentlyContinue
+    if ($alive) {
+        Stop-Process -Id $oldPid -Force -ErrorAction SilentlyContinue
+        return   # toggle OFF : la fenetre etait ouverte, on l'a fermee
+    }
 }
+Set-Content -Path $pidFile -Value $PID -Encoding ascii -NoNewline
 
 # --- Lecture de la config ---
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -145,11 +148,11 @@ $form.Add_Load({
     $cx = $wa.X + [int](($wa.Width  - $winW) / 2)
     $cy = $wa.Y + [int](($wa.Height - $winH) / 2)
     $candidates = @(
-        @{ X = $cx;                         Y = $cy },
-        @{ X = $wa.X + $m;                  Y = $wa.Y + $m },
-        @{ X = $wa.Right - $winW - $m;      Y = $wa.Y + $m },
-        @{ X = $wa.X + $m;                  Y = $wa.Bottom - $winH - $m },
-        @{ X = $wa.Right - $winW - $m;      Y = $wa.Bottom - $winH - $m }
+        @{ X = $cx;                    Y = $cy },
+        @{ X = $wa.X + $m;             Y = $wa.Y + $m },
+        @{ X = $wa.Right - $winW - $m; Y = $wa.Y + $m },
+        @{ X = $wa.X + $m;             Y = $wa.Bottom - $winH - $m },
+        @{ X = $wa.Right - $winW - $m; Y = $wa.Bottom - $winH - $m }
     )
     $chosen = $candidates[0]
     foreach ($c in $candidates) {
@@ -170,5 +173,14 @@ $form.Add_Click($closeIt)
 if ($cfg.CloseOnFocusLost -and $env:QUICKREF_NO_AUTOCLOSE -ne '1') {
     $form.Add_Deactivate($closeIt)
 }
+
+# --- Nettoyer le fichier PID a la fermeture (seulement si c'est le notre) ---
+$form.Add_FormClosing({
+    if (Test-Path $pidFile) {
+        $cur = $null
+        try { $cur = [int]((Get-Content $pidFile -Raw).Trim()) } catch {}
+        if ($cur -eq $PID) { Remove-Item $pidFile -Force -ErrorAction SilentlyContinue }
+    }
+}.GetNewClosure())
 
 [System.Windows.Forms.Application]::Run($form)
