@@ -84,17 +84,16 @@ function ConvertTo-Hotkey {
     param([string]$s)
     $mods = 0; $vk = 0
     foreach ($p in ($s -split '\+')) {
-        switch ($p.Trim().ToLower()) {
-            'ctrl'    { $mods = $mods -bor 2 }
-            'control' { $mods = $mods -bor 2 }
-            'alt'     { $mods = $mods -bor 1 }
-            'shift'   { $mods = $mods -bor 4 }
-            'win'     { $mods = $mods -bor 8 }
-            default {
-                $k = $p.Trim().ToUpper()
-                if ($k.Length -eq 1) { $vk = [int][char]$k }
-                elseif ($k -match '^F([1-9]|1[0-2])$') { $vk = 0x70 + [int]$k.Substring(1) - 1 }
-            }
+        $t = $p.Trim().ToLower()
+        if     ($t -eq 'ctrl' -or $t -eq 'control') { $mods = $mods -bor 2 }
+        elseif ($t -eq 'alt')                       { $mods = $mods -bor 1 }
+        elseif ($t -eq 'shift')                     { $mods = $mods -bor 4 }
+        elseif ($t -eq 'win')                       { $mods = $mods -bor 8 }
+        else {
+            $k = $p.Trim().ToUpper()
+            if ($k -eq 'SPACE') { $vk = 0x20 }
+            elseif ($k.Length -eq 1) { $vk = [int][char]$k }
+            elseif ($k -match '^F([1-9]|1[0-2])$') { $vk = 0x70 + [int]$k.Substring(1) - 1 }
         }
     }
     $mods = $mods -bor 0x4000   # MOD_NOREPEAT : pas de re-declenchement si la touche reste enfoncee
