@@ -1,20 +1,92 @@
 {
   "title": "Raccourcis",
   "hotkey": "Ctrl+Alt+W",
-  "font": { "name": "Consolas", "size": 13, "bold": false },
-  "padding": 26,
-  "lineSpacing": 8,
+  "font": { "name": "Consolas", "size": 12 },
+  "padding": 24,
+  "lineSpacing": 7,
+  "separator": "=",
   "closeOnFocusLost": true,
+  "footer": "Echap pour fermer   |   doc complete : github.com/enixCode/quickref",
   "colors": {
     "background": [24, 24, 28],
-    "foreground": [235, 235, 235],
+    "foreground": [210, 210, 214],
     "accent": [96, 230, 150],
     "border": [96, 230, 150]
   },
-  "lines": [
-    "ZONES    Ctrl+w h/j/k/l  bouger    Ctrl+w e  explorateur    Ctrl+w v / s  split    Ctrl+w q  fermer",
-    "VSCODE   Ctrl+P  ouvrir fichier    Ctrl+Shift+P  commandes    Ctrl+Tab  changer    Ctrl+B  sidebar    Ctrl+W  fermer onglet",
-    "VIM      i / Echap  ecrire/naviguer    h j k l  deplacer    w / b  mot    gg / G  haut/bas    /texte  chercher",
-    "VIM      dd  couper    yy  copier    p  coller    u / Ctrl+r  annuler/refaire    gd  definition"
-  ]
+  "grid": {
+    "rows": 2,
+    "cols": 3,
+    "colGap": 46,
+    "rowGap": 22,
+    "cells": [
+      {
+        "row": 0, "col": 0, "title": "NAVIGATION",
+        "items": [
+          "Ctrl+P = ouvrir un fichier",
+          "Ctrl+Shift+P = palette de commandes",
+          "Ctrl+Shift+E = explorateur",
+          "Ctrl+Shift+F = recherche projet",
+          "Ctrl+Tab = fichier suivant",
+          "Ctrl+B = afficher/cacher sidebar",
+          "Alt+Gauche / Droite = retour / avant"
+        ]
+      },
+      {
+        "row": 0, "col": 1, "title": "EDITION",
+        "items": [
+          "Alt+Haut / Bas = deplacer la ligne",
+          "Shift+Alt+Bas = dupliquer la ligne",
+          "Ctrl+/ = commenter",
+          "F2 = renommer le symbole",
+          "Ctrl+D = occurrence suivante",
+          "Ctrl+Shift+L = toutes les occurrences",
+          "Alt+Clic = multi-curseur"
+        ]
+      },
+      {
+        "row": 0, "col": 2, "title": "PANNEAUX",
+        "items": [
+          "Ctrl+Shift+J = terminal",
+          "Ctrl+\\ = diviser l'editeur",
+          "Ctrl+1 / 2 = groupe d'editeurs",
+          "Ctrl+W = fermer l'onglet",
+          "Ctrl+K Z = mode zen",
+          "Ctrl+, = parametres"
+        ]
+      },
+      {
+        "row": 1, "col": 0, "title": "VIM MOUVEMENT",
+        "items": [
+          "h j k l = gauche bas haut droite",
+          "w / b = mot suivant / precedent",
+          "gg / G = haut / bas du fichier",
+          "0 / $ = debut / fin de ligne",
+          "Ctrl+d / Ctrl+u = demi-page",
+          "f<car> = saut au caractere"
+        ]
+      },
+      {
+        "row": 1, "col": 1, "title": "VIM EDITION",
+        "items": [
+          "i / a = inserer avant / apres",
+          "o / O = ligne dessous / dessus",
+          "dd = couper la ligne",
+          "yy / p = copier / coller",
+          "ciw = remplacer le mot",
+          "u / Ctrl+r = annuler / refaire"
+        ]
+      },
+      {
+        "row": 1, "col": 2, "title": "VIM SELECTION",
+        "items": [
+          "v / V = visuel / visuel ligne",
+          "gd = aller a la definition",
+          "/texte = chercher",
+          "n / N = occurrence suiv / prec",
+          ":w = sauvegarder",
+          "Echap = mode normal"
+        ]
+      }
+    ]
+  }
 }

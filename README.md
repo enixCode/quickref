@@ -1,123 +1,141 @@
 # quickref
 
-Un aide-mémoire en surimpression : une touche ouvre une fenêtre sans bords affichant ton texte, la même touche la referme. Idéal pour garder tes raccourcis (VSCode, Vim, autre) à portée de main sans qu'ils encombrent l'écran.
+Un aide-mémoire en surimpression : une touche affiche une fenêtre sans bords avec une **grille de raccourcis**, la même touche la referme. Idéal pour garder tes raccourcis VSCode + Vim à portée de main sans qu'ils encombrent l'écran.
 
 100% standard Windows : PowerShell + WinForms. Rien à installer d'autre.
 
-- **Ouverture instantanée** : un petit process reste en fond (WinForms déjà chargé, fenêtre pré-construite), donc l'affichage est immédiat.
-- **Toggle** : la même touche ouvre puis ferme la fenêtre.
-- Se ferme aussi sur **Échap**, un **clic**, ou quand elle **perd le focus**.
-- **Ne recouvre jamais le curseur** : elle s'ouvre sur l'écran où est la souris, à un emplacement libre.
+- **Grille configurable** : tu choisis dans `config.json` combien de lignes et de colonnes, et ce que contient chaque case.
+- **Auto-style** : dans chaque raccourci, la **touche** (avant le `=`) s'affiche en couleur d'accent, l'**action** en gris. Lisible d'un coup d'œil.
+- **Ouverture instantanée** : un petit process reste en fond (WinForms déjà chargé, fenêtre pré-construite).
+- **Toggle** : la même touche ouvre puis ferme. Se ferme aussi sur **Échap**, un **clic**, ou perte de focus.
+- **Ne recouvre jamais le curseur** : s'ouvre sur l'écran où est la souris, à un emplacement libre.
 - Touche globale **native** (`RegisterHotKey`), fiable. Démarre automatiquement à l'ouverture de session.
-- **Mise à jour automatique** : au démarrage, le résident vérifie GitHub et se met à jour seul si une nouvelle version existe (ton `config.json` est préservé).
-- Texte, couleurs, police, taille, touche : tout dans `config.json`.
+- **Mise à jour automatique** depuis GitHub (ton `config.json` est préservé).
 
 ## Installation
 
 ### En une ligne (recommandé)
 
-Ouvre PowerShell et colle :
-
 ```powershell
 irm https://raw.githubusercontent.com/enixCode/quickref/main/install.ps1 | iex
 ```
 
-### One-click (depuis un clone du repo)
+### One-click (depuis un clone)
 
 Double-clique **`Install-QuickRef.cmd`**.
 
-### En ligne de commande (depuis un clone)
-
-```powershell
-& "$env:USERPROFILE\OneDrive\Github\quickref\install.ps1"
-```
-
-Aucun droit administrateur nécessaire (tout s'installe dans ton espace utilisateur). L'installation copie quickref dans `%LOCALAPPDATA%\quickref`, l'ajoute au démarrage de Windows, et lance le résident.
-
-La touche par défaut est **`Ctrl+Alt+W`**, choisie pour être déclenchable d'une seule main gauche sur AZERTY (W est en bas à gauche, près de Ctrl/Alt).
+Aucun droit administrateur nécessaire. L'installation copie quickref dans `%LOCALAPPDATA%\quickref`, l'ajoute au démarrage de Windows, et lance le résident. Touche par défaut : **`Ctrl+Alt+W`** (déclenchable d'une main gauche sur AZERTY).
 
 ## Mise à jour
 
-**Automatique** : à chaque ouverture de session, le résident compare sa version (`VERSION`) à celle de GitHub et se met à jour seul si besoin, en préservant ton `config.json`.
-
-Pour forcer une mise à jour tout de suite, relance simplement l'installation (one-liner ou `Install-QuickRef.cmd`).
+**Automatique** au démarrage (compare `VERSION` local et GitHub, préserve `config.json`). Pour forcer : relance l'installation.
 
 ## Désinstallation
 
-- **One-click** : double-clique **`Uninstall-QuickRef.cmd`** (présent dans le dossier du projet et dans `%LOCALAPPDATA%\quickref`).
-- **Ligne de commande** :
-  ```powershell
-  powershell -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\quickref\uninstall.ps1"
-  ```
+Double-clique **`Uninstall-QuickRef.cmd`**, ou :
 
-Ça arrête le résident, le retire du démarrage, et supprime les fichiers installés.
+```powershell
+powershell -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\quickref\uninstall.ps1"
+```
 
-## Keychron
+## Personnalisation : la grille
 
-Le but : une touche dédiée du clavier. Dans le logiciel Keychron (VIA / Keychron Launcher), mappe la touche voulue pour qu'elle **envoie la combinaison** `Ctrl+Alt+W` (ou celle que tu as choisie). Windows la captera et ouvrira/fermera la fenêtre.
+Édite `%LOCALAPPDATA%\quickref\config.json`, puis **relance le résident** (double-clic sur `Start-QuickRef.vbs`, ou rouvre ta session).
 
-## Personnalisation
-
-Édite `%LOCALAPPDATA%\quickref\config.json`, puis **relance le résident** pour appliquer (double-clic sur `%LOCALAPPDATA%\quickref\Start-QuickRef.vbs`, ou rouvre ta session).
+La grille se définit par un nombre de lignes (`rows`) et colonnes (`cols`), et une liste de **cases** (`cells`) que tu places en `row`/`col` :
 
 ```json
 {
-  "title": "Raccourcis",
   "hotkey": "Ctrl+Alt+W",
-  "font": { "name": "Consolas", "size": 13, "bold": false },
-  "padding": 26,
-  "lineSpacing": 8,
+  "font": { "name": "Consolas", "size": 12 },
+  "padding": 24,
+  "lineSpacing": 7,
+  "separator": "=",
   "closeOnFocusLost": true,
+  "footer": "Echap pour fermer",
   "colors": {
     "background": [24, 24, 28],
-    "foreground": [235, 235, 235],
+    "foreground": [210, 210, 214],
     "accent": [96, 230, 150],
     "border": [96, 230, 150]
   },
-  "lines": [
-    "Premiere ligne d'aide-memoire",
-    "Deuxieme ligne"
-  ]
+  "grid": {
+    "rows": 2,
+    "cols": 3,
+    "colGap": 46,
+    "rowGap": 22,
+    "cells": [
+      { "row": 0, "col": 0, "title": "NAVIGATION", "items": [
+          "Ctrl+P = ouvrir un fichier",
+          "Ctrl+Shift+P = palette de commandes"
+      ] },
+      { "row": 0, "col": 1, "title": "VIM", "items": [
+          "dd = couper la ligne",
+          "yy / p = copier / coller"
+      ] }
+    ]
+  }
 }
 ```
 
+### Réglages
+
 | Clé | Rôle |
 |---|---|
-| `title` | titre affiché en couleur d'accent en haut |
-| `hotkey` | la touche globale, ex. `"Ctrl+Alt+W"` (modificateurs : `Ctrl`, `Alt`, `Shift`, `Win` ; touche : une lettre, `F1`-`F12`, ou `Space`) |
-| `font` | police, taille, gras |
-| `padding` | marge intérieure (px) |
-| `lineSpacing` | espace entre les lignes (px) |
-| `closeOnFocusLost` | `true` = se ferme dès qu'on clique ailleurs |
-| `colors.*` | couleurs `[R, G, B]` (fond, texte, accent, bordure) |
-| `lines` | les lignes affichées (la fenêtre s'adapte à leur taille) |
+| `hotkey` | touche globale, ex. `"Ctrl+Alt+W"` (modificateurs `Ctrl` `Alt` `Shift` `Win` ; touche : lettre, `F1`-`F12`, `Space`) |
+| `font.name` / `font.size` | police et taille |
+| `padding` | marge intérieure de la fenêtre (px) |
+| `lineSpacing` | espace entre les lignes d'une case (px) |
+| `separator` | caractère qui sépare la touche de l'action (défaut `=`) ; la partie avant est colorée en accent |
+| `closeOnFocusLost` | `true` = se ferme quand on clique ailleurs |
+| `footer` | petite ligne grise en bas (optionnel) |
+| `colors.*` | `[R, G, B]` : `background`, `foreground` (action), `accent` (touche + titres), `border` |
 
-La fenêtre se redimensionne automatiquement au contenu.
+### Grille (`grid`)
+
+| Clé | Rôle |
+|---|---|
+| `rows` / `cols` | nombre de lignes et de colonnes |
+| `colGap` / `rowGap` | espacement entre colonnes / entre lignes (px) |
+| `cells` | liste des cases ; chaque case a `row`, `col`, `title`, et `items` (les raccourcis) |
+
+La fenêtre se dimensionne automatiquement au contenu. Une case vide (aucune `cell` à cette position) laisse juste un espace.
+
+## Keychron
+
+Dans le logiciel Keychron (VIA / Keychron Launcher), mappe ta touche pour qu'elle **envoie** `Ctrl+Alt+W` (ou la combinaison choisie dans `config.json`).
+
+## Liens utiles
+
+- **Raccourcis clavier VSCode (Windows)** : https://code.visualstudio.com/docs/getstarted/keybindings
+- **PDF officiel des raccourcis VSCode (Windows)** : https://code.visualstudio.com/shortcuts/keyboard-shortcuts-windows.pdf
+- **Extension VSCodeVim (Marketplace)** : https://marketplace.visualstudio.com/items?itemName=vscodevim.vim
+- **VSCodeVim (dépôt + liste des commandes supportées)** : https://github.com/VSCodeVim/Vim
+- **Personnaliser ses keybindings VSCode** : https://code.visualstudio.com/docs/getstarted/keybindings#_advanced-customization
 
 ## Architecture
 
 ```
 quickref/
-├─ Install-QuickRef.cmd     double-clic pour installer (appelle install.ps1)
-├─ Uninstall-QuickRef.cmd   double-clic pour desinstaller (appelle uninstall.ps1)
+├─ Install-QuickRef.cmd     double-clic pour installer
+├─ Uninstall-QuickRef.cmd   double-clic pour desinstaller
 ├─ install.ps1              installe (local OU distant via irm|iex), ajoute au demarrage
-├─ uninstall.ps1           arrete le resident, retire du demarrage, supprime les fichiers
-├─ Start-QuickRef.vbs       lanceur silencieux (-Sta, sans console) du resident
-├─ config.json             tes reglages (texte, touche, couleurs, police)
-├─ VERSION                 numero de version (semver), base de l'auto-update
-├─ .gitignore              fichiers ignores par git
+├─ uninstall.ps1           arrete le resident, retire du demarrage, supprime
+├─ Start-QuickRef.vbs       lanceur silencieux (-Sta, sans console)
+├─ config.json             la grille + les reglages
+├─ VERSION                 version (semver), base de l'auto-update
+├─ .gitignore
 └─ src/
-   ├─ Show-QuickRef.ps1     le resident : hotkey natif, fenetre HUD, toggle, anti-curseur
+   ├─ Show-QuickRef.ps1     le resident : hotkey natif, moteur de grille, toggle
    └─ AutoUpdate.ps1        verifie GitHub au demarrage et se met a jour seul
 ```
 
 ### Comment ça marche
 
-- `src/Show-QuickRef.ps1` est lancé une fois (au login, ou par l'install) et **reste en fond**. Il enregistre la touche globale via `RegisterHotKey` et garde une fenêtre prête, masquée.
-- À l'appui sur la touche, il fait juste **Afficher / Masquer** la fenêtre → instantané.
-- Au démarrage, il appelle `AutoUpdate.ps1` : si GitHub a une version plus récente, il télécharge, remplace les fichiers (en gardant `config.json`) et se relance.
-- `Start-QuickRef.vbs` le démarre **sans fenêtre console** et en mode `-Sta` (requis par WinForms).
-- Le **dossier source** (ce repo) est ce que tu édites ; l'**installation** vit dans `%LOCALAPPDATA%\quickref`. `install.ps1` copie de l'un vers l'autre.
+- `src/Show-QuickRef.ps1` tourne en fond. Il lit la grille du `config.json`, calcule la mise en page (largeur de chaque colonne, hauteur de chaque ligne) une fois, et garde une fenêtre prête, masquée.
+- Il enregistre la touche globale via `RegisterHotKey`. À l'appui : **Afficher / Masquer** → instantané.
+- Au démarrage, `AutoUpdate.ps1` vérifie GitHub et se met à jour si besoin.
+- `Start-QuickRef.vbs` le démarre sans console, en `-Sta` (requis WinForms).
 
 ## Prérequis
 
