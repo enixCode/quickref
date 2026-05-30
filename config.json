@@ -1,6 +1,6 @@
 {
   "title": "Raccourcis",
-  "hotkey": "Ctrl+Alt+R",
+  "hotkey": "Ctrl+Alt+W",
   "font": { "name": "Consolas", "size": 13, "bold": false },
   "padding": 26,
   "lineSpacing": 8,
