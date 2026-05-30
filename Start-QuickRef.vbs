@@ -1,5 +1,5 @@
-' Launch-QuickRef.vbs
-' Ouvre (ou ferme) la fenetre quickref en silence, en -Sta (obligatoire pour WinForms).
+' Start-QuickRef.vbs
+' Demarre le resident quickref en silence (sans fenetre console), en -Sta (requis WinForms).
 Set sh = CreateObject("WScript.Shell")
 root = Left(WScript.ScriptFullName, InStrRev(WScript.ScriptFullName, "\"))
 script = root & "src\Show-QuickRef.ps1"

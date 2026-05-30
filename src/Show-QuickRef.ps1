@@ -39,10 +39,24 @@ public class QuickRefHotkey : NativeWindow {
 }
 '@
 
-# --- Lecture de la config ---
+# --- Chemins ---
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $root = Split-Path -Parent $here
 $configPath = Join-Path $root 'config.json'
+
+# --- Auto-update au demarrage (sauf si on vient d'etre relance par une mise a jour) ---
+if ($env:QUICKREF_SKIP_UPDATE -ne '1') {
+    try {
+        . (Join-Path $here 'AutoUpdate.ps1')
+        if (Invoke-QuickRefAutoUpdate -Root $root) {
+            L 'auto-update applique -> relancement'
+            try { $mutex.ReleaseMutex() } catch {}
+            $env:QUICKREF_SKIP_UPDATE = '1'
+            Start-Process wscript.exe -ArgumentList ('"' + (Join-Path $root 'Start-QuickRef.vbs') + '"')
+            return
+        }
+    } catch {}
+}
 
 function Get-DefaultConfig {
     @{

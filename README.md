@@ -4,32 +4,51 @@ Un aide-mémoire en surimpression : une touche ouvre une fenêtre sans bords aff
 
 100% standard Windows : PowerShell + WinForms. Rien à installer d'autre.
 
-- **Ouverture instantanée** : un petit process reste en fond (WinForms déjà chargé, fenêtre pré-construite), donc l'affichage est immédiat, sans le délai d'un lancement à froid.
+- **Ouverture instantanée** : un petit process reste en fond (WinForms déjà chargé, fenêtre pré-construite), donc l'affichage est immédiat.
 - **Toggle** : la même touche ouvre puis ferme la fenêtre.
 - Se ferme aussi sur **Échap**, un **clic**, ou quand elle **perd le focus**.
-- **Ne recouvre jamais le curseur** de la souris : elle s'ouvre sur l'écran où est la souris, à un emplacement libre (centre, sinon un coin).
+- **Ne recouvre jamais le curseur** : elle s'ouvre sur l'écran où est la souris, à un emplacement libre.
 - Touche globale **native** (`RegisterHotKey`), fiable. Démarre automatiquement à l'ouverture de session.
+- **Mise à jour automatique** : au démarrage, le résident vérifie GitHub et se met à jour seul si une nouvelle version existe (ton `config.json` est préservé).
 - Texte, couleurs, police, taille, touche : tout dans `config.json`.
 
-## Installation (one-click)
+## Installation
 
-**Double-clique `Install-QuickRef.cmd`.** C'est tout.
+### En une ligne (recommandé)
 
-Aucun droit administrateur nécessaire (tout s'installe dans ton espace utilisateur). Ça :
-1. copie quickref dans `%LOCALAPPDATA%\quickref`,
-2. l'ajoute au démarrage de Windows (le résident se relance à chaque login),
-3. lance le résident tout de suite.
+Ouvre PowerShell et colle :
 
-> Alternative en ligne de commande (si tu préfères) :
-> ```powershell
-> & "$env:USERPROFILE\OneDrive\Github\quickref\install.ps1"
-> ```
+```powershell
+irm https://raw.githubusercontent.com/enixCode/quickref/main/install.ps1 | iex
+```
+
+### One-click (depuis un clone du repo)
+
+Double-clique **`Install-QuickRef.cmd`**.
+
+### En ligne de commande (depuis un clone)
+
+```powershell
+& "$env:USERPROFILE\OneDrive\Github\quickref\install.ps1"
+```
+
+Aucun droit administrateur nécessaire (tout s'installe dans ton espace utilisateur). L'installation copie quickref dans `%LOCALAPPDATA%\quickref`, l'ajoute au démarrage de Windows, et lance le résident.
 
 La touche par défaut est **`Ctrl+Alt+W`**, choisie pour être déclenchable d'une seule main gauche sur AZERTY (W est en bas à gauche, près de Ctrl/Alt).
 
-## Désinstallation (one-click)
+## Mise à jour
 
-**Double-clique `Uninstall-QuickRef.cmd`** (présent dans le dossier du projet et aussi dans `%LOCALAPPDATA%\quickref`).
+**Automatique** : à chaque ouverture de session, le résident compare sa version (`VERSION`) à celle de GitHub et se met à jour seul si besoin, en préservant ton `config.json`.
+
+Pour forcer une mise à jour tout de suite, relance simplement l'installation (one-liner ou `Install-QuickRef.cmd`).
+
+## Désinstallation
+
+- **One-click** : double-clique **`Uninstall-QuickRef.cmd`** (présent dans le dossier du projet et dans `%LOCALAPPDATA%\quickref`).
+- **Ligne de commande** :
+  ```powershell
+  powershell -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\quickref\uninstall.ps1"
+  ```
 
 Ça arrête le résident, le retire du démarrage, et supprime les fichiers installés.
 
@@ -39,7 +58,7 @@ Le but : une touche dédiée du clavier. Dans le logiciel Keychron (VIA / Keychr
 
 ## Personnalisation
 
-Édite `%LOCALAPPDATA%\quickref\config.json`, puis **relance le résident** pour appliquer (double-clic sur `%LOCALAPPDATA%\quickref\Launch-QuickRef.vbs`, ou rouvre ta session).
+Édite `%LOCALAPPDATA%\quickref\config.json`, puis **relance le résident** pour appliquer (double-clic sur `%LOCALAPPDATA%\quickref\Start-QuickRef.vbs`, ou rouvre ta session).
 
 ```json
 {
@@ -81,20 +100,23 @@ La fenêtre se redimensionne automatiquement au contenu.
 quickref/
 ├─ Install-QuickRef.cmd     double-clic pour installer (appelle install.ps1)
 ├─ Uninstall-QuickRef.cmd   double-clic pour desinstaller (appelle uninstall.ps1)
-├─ install.ps1              copie vers %LOCALAPPDATA%, ajoute au demarrage, lance le resident
+├─ install.ps1              installe (local OU distant via irm|iex), ajoute au demarrage
 ├─ uninstall.ps1           arrete le resident, retire du demarrage, supprime les fichiers
-├─ Launch-QuickRef.vbs      lanceur silencieux (-Sta, sans console) du resident
+├─ Start-QuickRef.vbs       lanceur silencieux (-Sta, sans console) du resident
 ├─ config.json             tes reglages (texte, touche, couleurs, police)
+├─ VERSION                 numero de version (semver), base de l'auto-update
 ├─ .gitignore              fichiers ignores par git
 └─ src/
-   └─ Show-QuickRef.ps1     le resident : hotkey natif, fenetre HUD, toggle, positionnement anti-curseur
+   ├─ Show-QuickRef.ps1     le resident : hotkey natif, fenetre HUD, toggle, anti-curseur
+   └─ AutoUpdate.ps1        verifie GitHub au demarrage et se met a jour seul
 ```
 
 ### Comment ça marche
 
 - `src/Show-QuickRef.ps1` est lancé une fois (au login, ou par l'install) et **reste en fond**. Il enregistre la touche globale via `RegisterHotKey` et garde une fenêtre prête, masquée.
 - À l'appui sur la touche, il fait juste **Afficher / Masquer** la fenêtre → instantané.
-- `Launch-QuickRef.vbs` sert à le démarrer **sans fenêtre console** et en mode `-Sta` (requis par WinForms).
+- Au démarrage, il appelle `AutoUpdate.ps1` : si GitHub a une version plus récente, il télécharge, remplace les fichiers (en gardant `config.json`) et se relance.
+- `Start-QuickRef.vbs` le démarre **sans fenêtre console** et en mode `-Sta` (requis par WinForms).
 - Le **dossier source** (ce repo) est ce que tu édites ; l'**installation** vit dans `%LOCALAPPDATA%\quickref`. `install.ps1` copie de l'un vers l'autre.
 
 ## Prérequis
