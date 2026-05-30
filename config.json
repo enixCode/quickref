@@ -1,0 +1,20 @@
+{
+  "title": "Raccourcis",
+  "hotkey": "Ctrl+Alt+Space",
+  "font": { "name": "Consolas", "size": 13, "bold": false },
+  "padding": 26,
+  "lineSpacing": 8,
+  "closeOnFocusLost": true,
+  "colors": {
+    "background": [24, 24, 28],
+    "foreground": [235, 235, 235],
+    "accent": [96, 230, 150],
+    "border": [96, 230, 150]
+  },
+  "lines": [
+    "ZONES    Ctrl+w h/j/k/l  bouger    Ctrl+w e  explorateur    Ctrl+w v / s  split    Ctrl+w q  fermer",
+    "VSCODE   Ctrl+P  ouvrir fichier    Ctrl+Shift+P  commandes    Ctrl+Tab  changer    Ctrl+B  sidebar    Ctrl+W  fermer onglet",
+    "VIM      i / Echap  ecrire/naviguer    h j k l  deplacer    w / b  mot    gg / G  haut/bas    /texte  chercher",
+    "VIM      dd  couper    yy  copier    p  coller    u / Ctrl+r  annuler/refaire    gd  definition"
+  ]
+}
