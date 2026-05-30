@@ -1,6 +1,6 @@
 {
   "title": "Raccourcis",
-  "hotkey": "Ctrl+Alt+Space",
+  "hotkey": "Ctrl+Alt+R",
   "font": { "name": "Consolas", "size": 13, "bold": false },
   "padding": 26,
   "lineSpacing": 8,

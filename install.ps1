@@ -8,7 +8,7 @@
 $ErrorActionPreference = 'Stop'
 
 $InstallDir = Join-Path $env:LOCALAPPDATA 'quickref'
-$Hotkey     = 'Ctrl+Alt+Space'   # touche globale par defaut (ta Keychron enverra cette combo)
+$Hotkey     = 'Ctrl+Alt+R'   # touche globale par defaut (ta Keychron enverra cette combo)
 
 function Write-Step($m) { Write-Host "==> $m" -ForegroundColor Cyan }
 

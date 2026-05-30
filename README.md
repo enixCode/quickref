@@ -16,13 +16,13 @@ Un aide-mémoire en surimpression : une touche ouvre une fenêtre sans bords aff
 & "$env:USERPROFILE\OneDrive\Github\quickref\install.ps1"
 ```
 
-Ça copie quickref dans `%LOCALAPPDATA%\quickref` et crée un raccourci avec la touche globale **`Ctrl+Alt+Space`**.
+Ça copie quickref dans `%LOCALAPPDATA%\quickref` et crée un raccourci avec la touche globale **`Ctrl+Alt+R`**.
 
-> Note : Windows interdit `Ctrl+Space` seul comme touche globale, d'où `Ctrl+Alt+Space` par défaut. Tu peux changer la combinaison en éditant `$Hotkey` en haut de `install.ps1`, puis relancer l'installation.
+> Note : la touche globale par défaut est `Ctrl+Alt+R` (R = Raccourcis). Windows réserve certaines combinaisons (ex. `Ctrl+Space`), donc passe par une combo avec `Ctrl+Alt`. Tu peux la changer en éditant `$Hotkey` en haut de `install.ps1`, puis relancer l'installation.
 
 ## Keychron
 
-Le but : une touche dédiée du clavier. Dans le logiciel Keychron (VIA / Keychron Launcher), mappe la touche voulue pour qu'elle **envoie la combinaison** `Ctrl+Alt+Space` (ou celle que tu as choisie). Windows la captera et ouvrira/fermera la fenêtre.
+Le but : une touche dédiée du clavier. Dans le logiciel Keychron (VIA / Keychron Launcher), mappe la touche voulue pour qu'elle **envoie la combinaison** `Ctrl+Alt+R` (ou celle que tu as choisie). Windows la captera et ouvrira/fermera la fenêtre.
 
 ## Personnalisation
 
