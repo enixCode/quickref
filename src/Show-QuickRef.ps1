@@ -1,39 +1,43 @@
-# Show-QuickRef.ps1
-# Fenetre sans bords qui affiche un aide-memoire (texte de config.json).
-# Toggle : relancer le script alors que la fenetre est ouverte la ferme.
-# Se ferme aussi sur Echap, clic, ou perte de focus.
+# Show-QuickRef.ps1  (RESIDENT)
+# Process leger qui reste en fond : WinForms charge une fois, fenetre pre-construite.
+# Un hotkey global natif (RegisterHotKey) affiche/masque la fenetre instantanement.
+# Se masque sur Echap, clic, perte de focus. Single-instance (mutex).
 # Contrainte : la fenetre ne recouvre jamais le curseur de la souris.
 $ErrorActionPreference = 'Stop'
+$log = Join-Path $env:TEMP 'quickref-resident.log'
+function L($m) { try { "[$([DateTime]::Now.ToString('HH:mm:ss'))] $m" | Add-Content $log } catch {} }
 
-# DPI aware AVANT toute fenetre (sinon dimensionnement faux sur ecran HiDPI).
+# --- Single instance : si un resident tourne deja, on sort. ---
+$createdNew = $false
+$mutex = New-Object System.Threading.Mutex($true, 'quickref-resident-singleton', [ref]$createdNew)
+if (-not $createdNew) { return }
+
+# --- DPI aware AVANT toute fenetre ---
 Add-Type -Namespace Native -Name Dpi -MemberDefinition '[DllImport("user32.dll")] public static extern bool SetProcessDPIAware();'
 try { [void][Native.Dpi]::SetProcessDPIAware() } catch {}
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
-$TITLE_TAG = 'quickref-hud'
-
-# --- TOGGLE via fichier PID (deterministe, inter-process) ---
-# Au lancement : si une instance tourne deja, on la ferme et on sort (toggle OFF).
-# Sinon on enregistre notre PID et on affiche la fenetre (toggle ON).
-$pidFile = Join-Path $env:TEMP 'quickref.pid'
-if (Test-Path $pidFile) {
-    $oldPid = $null
-    try { $oldPid = [int]((Get-Content $pidFile -Raw).Trim()) } catch {}
-    $alive = $false
-    if ($oldPid) {
-        $proc = Get-Process -Id $oldPid -ErrorAction SilentlyContinue
-        # Verifier que c'est bien un de nos process (powershell), pas un PID recycle.
-        if ($proc -and $proc.ProcessName -match 'powershell|pwsh') { $alive = $true }
+# --- Fenetre native qui capte le hotkey global (WM_HOTKEY) ---
+Add-Type -ReferencedAssemblies System.Windows.Forms -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+using System.Windows.Forms;
+public class QuickRefHotkey : NativeWindow {
+    [DllImport("user32.dll")] public static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
+    [DllImport("user32.dll")] public static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+    public const int WM_HOTKEY = 0x0312;
+    public event Action Pressed;
+    public QuickRefHotkey() { this.CreateHandle(new CreateParams()); }
+    protected override void WndProc(ref Message m) {
+        if (m.Msg == WM_HOTKEY && Pressed != null) { Pressed(); }
+        base.WndProc(ref m);
     }
-    Remove-Item $pidFile -Force -ErrorAction SilentlyContinue
-    if ($alive) {
-        Stop-Process -Id $oldPid -Force -ErrorAction SilentlyContinue
-        return   # toggle OFF : la fenetre etait ouverte, on l'a fermee
-    }
+    public bool Register(uint mod, uint vk) { return RegisterHotKey(this.Handle, 1, mod, vk); }
+    public void Unregister() { UnregisterHotKey(this.Handle, 1); }
 }
-Set-Content -Path $pidFile -Value $PID -Encoding ascii -NoNewline
+'@
 
 # --- Lecture de la config ---
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -42,13 +46,12 @@ $configPath = Join-Path $root 'config.json'
 
 function Get-DefaultConfig {
     @{
-        Title = 'Raccourcis'; FontName = 'Consolas'; FontSize = 13; Bold = $false
-        Padding = 26; LineSpacing = 8; CloseOnFocusLost = $true
-        Bg = @(24,24,28); Fg = @(235,235,235); Accent = @(96,230,150); Border = @(96,230,150)
-        Lines = @('config.json introuvable, valeurs par defaut.')
+        Title='Raccourcis'; Hotkey='Ctrl+Alt+W'; FontName='Consolas'; FontSize=13; Bold=$false
+        Padding=26; LineSpacing=8; CloseOnFocusLost=$true
+        Bg=@(24,24,28); Fg=@(235,235,235); Accent=@(96,230,150); Border=@(96,230,150)
+        Lines=@('config.json introuvable, valeurs par defaut.')
     }
 }
-
 function Import-Config {
     param([string]$Path)
     if (-not (Test-Path $Path)) { return Get-DefaultConfig }
@@ -59,11 +62,12 @@ function Import-Config {
     } catch { return Get-DefaultConfig }
     $col = { param($v,$d) if ($v) { @([int]$v[0],[int]$v[1],[int]$v[2]) } else { $d } }
     @{
-        Title       = if ($j.title) { [string]$j.title } else { 'Raccourcis' }
-        FontName    = if ($j.font -and $j.font.name) { [string]$j.font.name } else { 'Consolas' }
-        FontSize    = if ($j.font -and $j.font.size) { [double]$j.font.size } else { 13 }
-        Bold        = if ($j.font -and $null -ne $j.font.bold) { [bool]$j.font.bold } else { $false }
-        Padding     = if ($null -ne $j.padding) { [int]$j.padding } else { 26 }
+        Title    = if ($j.title) { [string]$j.title } else { 'Raccourcis' }
+        Hotkey   = if ($j.hotkey) { [string]$j.hotkey } else { 'Ctrl+Alt+W' }
+        FontName = if ($j.font -and $j.font.name) { [string]$j.font.name } else { 'Consolas' }
+        FontSize = if ($j.font -and $j.font.size) { [double]$j.font.size } else { 13 }
+        Bold     = if ($j.font -and $null -ne $j.font.bold) { [bool]$j.font.bold } else { $false }
+        Padding  = if ($null -ne $j.padding) { [int]$j.padding } else { 26 }
         LineSpacing = if ($null -ne $j.lineSpacing) { [int]$j.lineSpacing } else { 8 }
         CloseOnFocusLost = if ($null -ne $j.closeOnFocusLost) { [bool]$j.closeOnFocusLost } else { $true }
         Bg     = & $col $j.colors.background @(24,24,28)
@@ -73,114 +77,158 @@ function Import-Config {
         Lines  = if ($j.lines) { @($j.lines) } else { @('(aucune ligne dans config.json)') }
     }
 }
-
 $cfg = Import-Config -Path $configPath
 
-# --- Polices et couleurs ---
-$bodyStyle  = if ($cfg.Bold) { [System.Drawing.FontStyle]::Bold } else { [System.Drawing.FontStyle]::Regular }
-$bodyFont   = New-Object System.Drawing.Font($cfg.FontName, [single]$cfg.FontSize, $bodyStyle)
-$titleFont  = New-Object System.Drawing.Font($cfg.FontName, [single]($cfg.FontSize + 3), [System.Drawing.FontStyle]::Bold)
-$colBg     = [System.Drawing.Color]::FromArgb($cfg.Bg[0],     $cfg.Bg[1],     $cfg.Bg[2])
-$colFg     = [System.Drawing.Color]::FromArgb($cfg.Fg[0],     $cfg.Fg[1],     $cfg.Fg[2])
-$colAccent = [System.Drawing.Color]::FromArgb($cfg.Accent[0], $cfg.Accent[1], $cfg.Accent[2])
-$colBorder = [System.Drawing.Color]::FromArgb($cfg.Border[0], $cfg.Border[1], $cfg.Border[2])
+# --- Parse du hotkey ("Ctrl+Alt+W" -> modificateurs + code touche) ---
+function ConvertTo-Hotkey {
+    param([string]$s)
+    $mods = 0; $vk = 0
+    foreach ($p in ($s -split '\+')) {
+        switch ($p.Trim().ToLower()) {
+            'ctrl'    { $mods = $mods -bor 2 }
+            'control' { $mods = $mods -bor 2 }
+            'alt'     { $mods = $mods -bor 1 }
+            'shift'   { $mods = $mods -bor 4 }
+            'win'     { $mods = $mods -bor 8 }
+            default {
+                $k = $p.Trim().ToUpper()
+                if ($k.Length -eq 1) { $vk = [int][char]$k }
+                elseif ($k -match '^F([1-9]|1[0-2])$') { $vk = 0x70 + [int]$k.Substring(1) - 1 }
+            }
+        }
+    }
+    $mods = $mods -bor 0x4000   # MOD_NOREPEAT : pas de re-declenchement si la touche reste enfoncee
+    @{ Mods = [uint32]$mods; Vk = [uint32]$vk }
+}
 
-# --- Mesure du contenu pour dimensionner la fenetre ---
+# --- Polices et couleurs ---
+$bodyStyle = if ($cfg.Bold) { [System.Drawing.FontStyle]::Bold } else { [System.Drawing.FontStyle]::Regular }
+$bodyFont  = New-Object System.Drawing.Font($cfg.FontName, [single]$cfg.FontSize, $bodyStyle)
+$titleFont = New-Object System.Drawing.Font($cfg.FontName, [single]($cfg.FontSize + 3), [System.Drawing.FontStyle]::Bold)
+$colBg     = [System.Drawing.Color]::FromArgb($cfg.Bg[0],$cfg.Bg[1],$cfg.Bg[2])
+$colFg     = [System.Drawing.Color]::FromArgb($cfg.Fg[0],$cfg.Fg[1],$cfg.Fg[2])
+$colAccent = [System.Drawing.Color]::FromArgb($cfg.Accent[0],$cfg.Accent[1],$cfg.Accent[2])
+$colBorder = [System.Drawing.Color]::FromArgb($cfg.Border[0],$cfg.Border[1],$cfg.Border[2])
+
+# --- Dimensionnement au contenu ---
 $measure   = [System.Drawing.Graphics]::FromImage((New-Object System.Drawing.Bitmap 1,1))
 $titleSize = $measure.MeasureString($cfg.Title, $titleFont)
 $maxLineW  = 0
-foreach ($l in $cfg.Lines) {
-    $w = $measure.MeasureString($l, $bodyFont).Width
-    if ($w -gt $maxLineW) { $maxLineW = $w }
-}
+foreach ($l in $cfg.Lines) { $w = $measure.MeasureString($l, $bodyFont).Width; if ($w -gt $maxLineW) { $maxLineW = $w } }
 $measure.Dispose()
-
 $pad     = $cfg.Padding
 $lineH   = [int]$bodyFont.GetHeight()
 $titleH  = [int]$titleFont.GetHeight()
 $bigGap  = [int]($lineH * 0.8)
-$contentW = [int]([Math]::Ceiling([Math]::Max($titleSize.Width, $maxLineW)))
-$winW = $contentW + $pad * 2
+$winW = [int]([Math]::Ceiling([Math]::Max($titleSize.Width, $maxLineW))) + $pad * 2
 $winH = $pad * 2 + $titleH + $bigGap + ($cfg.Lines.Count * ($lineH + $cfg.LineSpacing)) - $cfg.LineSpacing
 
-# --- Fenetre sans bords ---
-$form = New-Object System.Windows.Forms.Form
-$form.Text            = $TITLE_TAG
-$form.FormBorderStyle = 'None'
-$form.StartPosition   = 'Manual'
-$form.ShowInTaskbar   = $false
-$form.TopMost         = $true
-$form.KeyPreview      = $true
-$form.BackColor       = $colBg
-$form.ClientSize      = New-Object System.Drawing.Size($winW, $winH)
+# --- Fenetre HUD (pre-construite, masquee) ---
+$hud = New-Object System.Windows.Forms.Form
+$hud.Text            = 'quickref-hud'
+$hud.FormBorderStyle = 'None'
+$hud.StartPosition   = 'Manual'
+$hud.ShowInTaskbar   = $false
+$hud.TopMost         = $true
+$hud.KeyPreview      = $true
+$hud.BackColor       = $colBg
+$hud.ClientSize      = New-Object System.Drawing.Size($winW, $winH)
 
 $panel = New-Object System.Windows.Forms.Panel
 $panel.Dock = 'Fill'
-$panel.GetType().GetProperty('DoubleBuffered', [Reflection.BindingFlags]'Instance,NonPublic').SetValue($panel, $true)
-$form.Controls.Add($panel)
+$panel.GetType().GetProperty('DoubleBuffered',[Reflection.BindingFlags]'Instance,NonPublic').SetValue($panel,$true)
+$hud.Controls.Add($panel)
 
 $brushFg     = New-Object System.Drawing.SolidBrush ($colFg)
 $brushAccent = New-Object System.Drawing.SolidBrush ($colAccent)
 $penBorder   = New-Object System.Drawing.Pen ($colBorder, 1)
+$textY = [int](($titleH))   # recalcule dans Paint via pad
 
 $panel.Add_Paint({
-    param($s, $e)
+    param($s,$e)
     $e.Graphics.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::AntiAlias
     $e.Graphics.Clear($colBg)
-    $x = $pad
-    $y = $pad
+    $x = $pad; $y = $pad
     $e.Graphics.DrawString($cfg.Title, $titleFont, $brushAccent, [single]$x, [single]$y)
     $y += $titleH + $bigGap
     foreach ($l in $cfg.Lines) {
         $e.Graphics.DrawString($l, $bodyFont, $brushFg, [single]$x, [single]$y)
         $y += $lineH + $cfg.LineSpacing
     }
-    # liseret pour distinguer la fenetre du fond
     $e.Graphics.DrawRectangle($penBorder, 0, 0, $panel.Width - 1, $panel.Height - 1)
 }.GetNewClosure())
 
-# --- Positionnement : sur l'ecran de la souris, sans recouvrir le curseur ---
-$form.Add_Load({
-    $cursor = [System.Windows.Forms.Cursor]::Position
-    $wa = [System.Windows.Forms.Screen]::FromPoint($cursor).WorkingArea
-    $m = 16   # marge depuis les bords
-    # Candidats : centre d'abord, puis les 4 coins. On garde le 1er qui ne contient pas le curseur.
-    $cx = $wa.X + [int](($wa.Width  - $winW) / 2)
-    $cy = $wa.Y + [int](($wa.Height - $winH) / 2)
-    $candidates = @(
-        @{ X = $cx;                    Y = $cy },
-        @{ X = $wa.X + $m;             Y = $wa.Y + $m },
-        @{ X = $wa.Right - $winW - $m; Y = $wa.Y + $m },
-        @{ X = $wa.X + $m;             Y = $wa.Bottom - $winH - $m },
-        @{ X = $wa.Right - $winW - $m; Y = $wa.Bottom - $winH - $m }
-    )
-    $chosen = $candidates[0]
-    foreach ($c in $candidates) {
-        $contient = ($cursor.X -ge $c.X) -and ($cursor.X -le ($c.X + $winW)) -and
-                    ($cursor.Y -ge $c.Y) -and ($cursor.Y -le ($c.Y + $winH))
-        if (-not $contient) { $chosen = $c; break }
-    }
-    $form.Left = $chosen.X
-    $form.Top  = $chosen.Y
-    $form.Activate()
-}.GetNewClosure())
+# Etat partage (anti-fermeture parasite juste apres l'ouverture)
+$state = @{ shownAt = 0 }
 
-# --- Fermeture : Echap, clic, perte de focus ---
-$closeIt = { $form.Close() }.GetNewClosure()
-$form.Add_KeyDown({ param($s,$e) if ($e.KeyCode -eq [System.Windows.Forms.Keys]::Escape) { $form.Close() } }.GetNewClosure())
-$panel.Add_Click($closeIt)
-$form.Add_Click($closeIt)
-if ($cfg.CloseOnFocusLost -and $env:QUICKREF_NO_AUTOCLOSE -ne '1') {
-    $form.Add_Deactivate($closeIt)
+# --- Placement : ecran de la souris, sans recouvrir le curseur ---
+function Move-AwayFromCursor {
+    $cur = [System.Windows.Forms.Cursor]::Position
+    $wa = [System.Windows.Forms.Screen]::FromPoint($cur).WorkingArea
+    $m = 16
+    $cx = $wa.X + [int](($wa.Width - $winW)/2)
+    $cy = $wa.Y + [int](($wa.Height - $winH)/2)
+    $cands = @(
+        @{X=$cx;Y=$cy},
+        @{X=$wa.X+$m;Y=$wa.Y+$m},
+        @{X=$wa.Right-$winW-$m;Y=$wa.Y+$m},
+        @{X=$wa.X+$m;Y=$wa.Bottom-$winH-$m},
+        @{X=$wa.Right-$winW-$m;Y=$wa.Bottom-$winH-$m}
+    )
+    $chosen = $cands[0]
+    foreach ($c in $cands) {
+        $in = ($cur.X -ge $c.X) -and ($cur.X -le ($c.X+$winW)) -and ($cur.Y -ge $c.Y) -and ($cur.Y -le ($c.Y+$winH))
+        if (-not $in) { $chosen = $c; break }
+    }
+    $hud.Left = $chosen.X; $hud.Top = $chosen.Y
 }
 
-# --- Nettoyer le fichier PID a la fermeture (seulement si c'est le notre) ---
-$form.Add_FormClosing({
-    if (Test-Path $pidFile) {
-        $cur = $null
-        try { $cur = [int]((Get-Content $pidFile -Raw).Trim()) } catch {}
-        if ($cur -eq $PID) { Remove-Item $pidFile -Force -ErrorAction SilentlyContinue }
+# --- Toggle (appele par le hotkey) : Show/Hide, instantane ---
+$toggle = {
+    if ($hud.Visible) {
+        $hud.Hide()
+    } else {
+        Move-AwayFromCursor
+        $state.shownAt = [Environment]::TickCount
+        $hud.Show()
+        $hud.BringToFront()
+        $hud.Activate()
     }
+}.GetNewClosure()
+
+# --- Masquage : Echap, clic, perte de focus ---
+$hideIt = { $hud.Hide() }.GetNewClosure()
+$hud.Add_KeyDown({ param($s,$e) if ($e.KeyCode -eq [System.Windows.Forms.Keys]::Escape) { $hud.Hide() } }.GetNewClosure())
+$panel.Add_Click($hideIt)
+$hud.Add_Click($hideIt)
+if ($cfg.CloseOnFocusLost) {
+    $hud.Add_Deactivate({
+        # Ignorer la desactivation parasite dans les ~300 ms suivant l'ouverture.
+        if (([Environment]::TickCount - $state.shownAt) -gt 300) { $hud.Hide() }
+    }.GetNewClosure())
+}
+# Ne jamais vraiment fermer la fenetre via la croix systeme : on masque.
+$hud.Add_FormClosing({
+    param($s,$e)
+    if ($e.CloseReason -eq [System.Windows.Forms.CloseReason]::UserClosing) { $e.Cancel = $true; $hud.Hide() }
 }.GetNewClosure())
 
-[System.Windows.Forms.Application]::Run($form)
+# Forcer la creation du handle + 1er rendu hors ecran (pour que le 1er Show soit instantane).
+$hud.Left = -32000; $hud.Top = -32000
+$hud.Show(); $hud.Hide()
+
+# --- Enregistrement du hotkey global ---
+$hk = New-Object QuickRefHotkey
+$hk.add_Pressed($toggle)
+$parts = ConvertTo-Hotkey $cfg.Hotkey
+$ok = $hk.Register($parts.Mods, $parts.Vk)
+L ("hotkey '$($cfg.Hotkey)' (mods=$($parts.Mods) vk=$($parts.Vk)) register=" + $ok)
+if (-not $ok) { L "ECHEC RegisterHotKey : combinaison probablement deja prise par une autre app." }
+
+# --- Boucle de messages (garde le process vivant et capte le hotkey) ---
+$ctx = New-Object System.Windows.Forms.ApplicationContext
+[System.Windows.Forms.Application]::Run($ctx)
+
+# Nettoyage (rarement atteint : le process est tue a la desinstallation)
+try { $hk.Unregister() } catch {}
+try { $mutex.ReleaseMutex() } catch {}
