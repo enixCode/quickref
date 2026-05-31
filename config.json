@@ -1,7 +1,7 @@
 {
   "title": "Raccourcis",
   "hotkey": "Ctrl+Alt+W",
-  "font": { "name": "Consolas", "size": 12 },
+  "font": { "name": "Consolas", "size": 17 },
   "padding": 24,
   "lineSpacing": 7,
   "separator": "=",

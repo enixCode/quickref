@@ -91,6 +91,7 @@ $fontFamily = [System.Windows.Media.FontFamily]::new($cfg.FontName)
 
 # --- Fenetre WPF sans bords ---
 $win = New-Object System.Windows.Window
+$win.Title       = 'quickref-hud'
 $win.WindowStyle = 'None'
 $win.ResizeMode  = 'NoResize'
 $win.AllowsTransparency = $true
@@ -224,11 +225,29 @@ public class QuickRefHotkey : NativeWindow {
 }
 '@
 
-# --- Placement sans recouvrir le curseur ---
+Add-Type -AssemblyName System.Windows.Forms
+
+# --- Placement en PIXELS physiques via Win32 (coherent quel que soit le DPI) ---
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class QrPos {
+    [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
+    [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint flags);
+    public struct RECT { public int L, T, R, B; }
+    public const uint NOSIZE = 0x0001, NOZORDER = 0x0004, SHOWWINDOW = 0x0040;
+    public static void Move(IntPtr h, int x, int y) { SetWindowPos(h, IntPtr.Zero, x, y, 0, 0, NOSIZE | NOZORDER | SHOWWINDOW); }
+    public static int W(IntPtr h) { RECT r; GetWindowRect(h, out r); return r.R - r.L; }
+    public static int H(IntPtr h) { RECT r; GetWindowRect(h, out r); return r.B - r.T; }
+}
+'@
+
 function Move-AwayFromCursor {
-    $pt = [System.Windows.Forms.Cursor]::Position
+    # Tout en pixels physiques : Cursor/Screen et la taille fenetre (GetWindowRect).
+    $hwnd = $script:hudHwnd
+    $pt  = [System.Windows.Forms.Cursor]::Position
     $scr = [System.Windows.Forms.Screen]::FromPoint($pt).WorkingArea
-    $w = $win.ActualWidth; $h = $win.ActualHeight
+    $w = [QrPos]::W($hwnd); $h = [QrPos]::H($hwnd)
     if ($w -le 0) { $w = 600 }; if ($h -le 0) { $h = 300 }
     $m = 16
     $cx = $scr.X + [int](($scr.Width - $w)/2)
@@ -244,9 +263,8 @@ function Move-AwayFromCursor {
         $in = ($pt.X -ge $c.X) -and ($pt.X -le ($c.X+$w)) -and ($pt.Y -ge $c.Y) -and ($pt.Y -le ($c.Y+$h))
         if (-not $in) { $ch = $c; break }
     }
-    $win.Left = $ch.X; $win.Top = $ch.Y
+    [QrPos]::Move($hwnd, [int]$ch.X, [int]$ch.Y)
 }
-Add-Type -AssemblyName System.Windows.Forms
 
 # --- Etat + toggle ---
 $state = @{ shownAt = 0 }
@@ -270,9 +288,12 @@ if ($cfg.CloseOnFocusLost) {
     }.GetNewClosure())
 }
 
-# Construire le layout une fois hors ecran pour un 1er affichage instantane.
+# Construire le layout une fois hors ecran pour un 1er affichage instantane,
+# et recuperer le handle natif (pour le positionnement en pixels via Win32).
 $win.Left = -32000; $win.Top = -32000
-$win.Show(); $win.Hide()
+$win.Show()
+$script:hudHwnd = (New-Object System.Windows.Interop.WindowInteropHelper($win)).Handle
+$win.Hide()
 
 # --- Hotkey global : la fenetre-message C# appelle $toggle a chaque appui ---
 $hk = New-Object QuickRefHotkey
