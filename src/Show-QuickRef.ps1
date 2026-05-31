@@ -1,51 +1,25 @@
-# Show-QuickRef.ps1  (RESIDENT)
-# Process leger qui reste en fond : WinForms charge une fois, fenetre pre-construite.
-# Un hotkey global natif (RegisterHotKey) affiche/masque la fenetre instantanement.
-# Affiche une GRILLE libre (lignes x colonnes) definie dans config.json.
-# Chaque raccourci est auto-style : la touche (avant le separateur) en couleur d'accent,
-# l'action en gris. Se masque sur Echap, clic, perte de focus. Single-instance (mutex).
+# Show-QuickRef.ps1  (RESIDENT, WPF)
+# Process leger qui reste en fond. Un hotkey global natif (RegisterHotKey) affiche/masque
+# une fenetre WPF sans bords contenant une GRILLE (lignes x colonnes) definie dans config.json.
+# WPF gere la mise en page (Grid natif) : pas de calcul pixel, pas de crash de layout.
+# Se masque sur Echap, clic, perte de focus. Single-instance (mutex).
 $ErrorActionPreference = 'Stop'
 $log = Join-Path $env:TEMP 'quickref-resident.log'
 function L($m) { try { "[$([DateTime]::Now.ToString('HH:mm:ss'))] $m" | Add-Content $log } catch {} }
 
-# --- Single instance : si un resident tourne deja, on sort. ---
+# --- Single instance ---
 $createdNew = $false
 $mutex = New-Object System.Threading.Mutex($true, 'quickref-resident-singleton', [ref]$createdNew)
 if (-not $createdNew) { return }
 
-# --- DPI aware AVANT toute fenetre ---
-Add-Type -Namespace Native -Name Dpi -MemberDefinition '[DllImport("user32.dll")] public static extern bool SetProcessDPIAware();'
-try { [void][Native.Dpi]::SetProcessDPIAware() } catch {}
+Add-Type -AssemblyName PresentationFramework
+Add-Type -AssemblyName PresentationCore
+Add-Type -AssemblyName WindowsBase
 
-Add-Type -AssemblyName System.Windows.Forms
-Add-Type -AssemblyName System.Drawing
-
-# --- Fenetre native qui capte le hotkey global (WM_HOTKEY) ---
-Add-Type -ReferencedAssemblies System.Windows.Forms -TypeDefinition @'
-using System;
-using System.Runtime.InteropServices;
-using System.Windows.Forms;
-public class QuickRefHotkey : NativeWindow {
-    [DllImport("user32.dll")] public static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
-    [DllImport("user32.dll")] public static extern bool UnregisterHotKey(IntPtr hWnd, int id);
-    public const int WM_HOTKEY = 0x0312;
-    public event Action Pressed;
-    public QuickRefHotkey() { this.CreateHandle(new CreateParams()); }
-    protected override void WndProc(ref Message m) {
-        if (m.Msg == WM_HOTKEY && Pressed != null) { Pressed(); }
-        base.WndProc(ref m);
-    }
-    public bool Register(uint mod, uint vk) { return RegisterHotKey(this.Handle, 1, mod, vk); }
-    public void Unregister() { UnregisterHotKey(this.Handle, 1); }
-}
-'@
-
-# --- Chemins ---
+# --- Chemins + auto-update ---
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $root = Split-Path -Parent $here
 $configPath = Join-Path $root 'config.json'
-
-# --- Auto-update au demarrage (sauf si on vient d'etre relance par une mise a jour) ---
 if ($env:QUICKREF_SKIP_UPDATE -ne '1') {
     try {
         . (Join-Path $here 'AutoUpdate.ps1')
@@ -59,88 +33,167 @@ if ($env:QUICKREF_SKIP_UPDATE -ne '1') {
     } catch {}
 }
 
-# --- Lecture de la config ---
-function Get-DefaultConfig {
-    @{
-        Title='Raccourcis'; Hotkey='Ctrl+Alt+W'; FontName='Consolas'; FontSize=12
-        Padding=24; LineSpacing=7; ColGap=46; RowGap=22; Separator='='; CloseOnFocusLost=$true
-        Bg=@(24,24,28); Fg=@(210,210,214); Accent=@(96,230,150); Border=@(96,230,150)
-        Footer=''
-        Grid=@(
-            @{ Row=0; Col=0; Title='QUICKREF'; Items=@('config.json introuvable','valeurs par defaut') }
-        )
-        Rows=1; Cols=1
+# --- Lecture config ---
+function Get-Cfg {
+    $def = @{
+        Hotkey='Ctrl+Alt+W'; FontName='Consolas'; FontSize=13; Separator='='; CloseOnFocusLost=$true
+        Footer=''; Bg='#181820'; Fg='#D2D2D6'; Accent='#60E696'; Border='#60E696'
+        Rows=1; Cols=1; Cells=@(@{ Row=0; Col=0; Title='QUICKREF'; Items=@('config.json introuvable') })
     }
-}
-
-function Import-Config {
-    param([string]$Path)
-    if (-not (Test-Path $Path)) { return Get-DefaultConfig }
+    if (-not (Test-Path $configPath)) { return $def }
     try {
-        $bytes = [System.IO.File]::ReadAllBytes($Path)
-        $raw   = [System.Text.Encoding]::UTF8.GetString($bytes).TrimStart([char]0xFEFF)
-        $j     = $raw | ConvertFrom-Json
-    } catch { return Get-DefaultConfig }
-
-    $col = { param($v,$d) if ($v) { @([int]$v[0],[int]$v[1],[int]$v[2]) } else { $d } }
-
-    # Construire la liste des cellules : prioritaire = grid.cells ; sinon fallback "lines".
+        $bytes = [System.IO.File]::ReadAllBytes($configPath)
+        $j = [System.Text.Encoding]::UTF8.GetString($bytes).TrimStart([char]0xFEFF) | ConvertFrom-Json
+    } catch { return $def }
+    $hex = { param($v,$d) if ($v -and $v.Count -eq 3) { '#{0:X2}{1:X2}{2:X2}' -f [int]$v[0],[int]$v[1],[int]$v[2] } else { $d } }
     $cells = @()
     $rows = 1; $cols = 1
     if ($j.grid -and $j.grid.cells) {
         foreach ($c in $j.grid.cells) {
-            $items = @()
-            if ($c.items) { $items = @($c.items | ForEach-Object { [string]$_ }) }
             $cells += @{
-                Row   = if ($null -ne $c.row) { [int]$c.row } else { 0 }
-                Col   = if ($null -ne $c.col) { [int]$c.col } else { 0 }
-                Title = if ($c.title) { [string]$c.title } else { '' }
-                Items = $items
+                Row=[int]$c.row; Col=[int]$c.col
+                Title=[string]$c.title
+                Items=@(if ($c.items) { $c.items | ForEach-Object { [string]$_ } })
             }
         }
-        $rows = if ($null -ne $j.grid.rows) { [int]$j.grid.rows } else { ($cells | ForEach-Object { $_.Row } | Measure-Object -Maximum).Maximum + 1 }
-        $cols = if ($null -ne $j.grid.cols) { [int]$j.grid.cols } else { ($cells | ForEach-Object { $_.Col } | Measure-Object -Maximum).Maximum + 1 }
-    } elseif ($j.lines) {
-        # Compat ancienne version : une seule colonne de lignes.
-        $cells += @{ Row=0; Col=0; Title=(if ($j.title) { [string]$j.title } else { 'Raccourcis' }); Items=@($j.lines | ForEach-Object { [string]$_ }) }
-        $rows = 1; $cols = 1
-    } else {
-        return Get-DefaultConfig
+        $rows = if ($j.grid.rows) { [int]$j.grid.rows } else { (($cells.Row | Measure-Object -Maximum).Maximum + 1) }
+        $cols = if ($j.grid.cols) { [int]$j.grid.cols } else { (($cells.Col | Measure-Object -Maximum).Maximum + 1) }
     }
-
     @{
-        Title    = if ($j.title) { [string]$j.title } else { 'Raccourcis' }
         Hotkey   = if ($j.hotkey) { [string]$j.hotkey } else { 'Ctrl+Alt+W' }
-        FontName = if ($j.font -and $j.font.name) { [string]$j.font.name } else { 'Consolas' }
-        FontSize = if ($j.font -and $j.font.size) { [double]$j.font.size } else { 12 }
-        Padding  = if ($null -ne $j.padding) { [int]$j.padding } else { 24 }
-        LineSpacing = if ($null -ne $j.lineSpacing) { [int]$j.lineSpacing } else { 7 }
-        ColGap   = if ($j.grid -and $null -ne $j.grid.colGap) { [int]$j.grid.colGap } else { 46 }
-        RowGap   = if ($j.grid -and $null -ne $j.grid.rowGap) { [int]$j.grid.rowGap } else { 22 }
+        FontName = if ($j.font.name) { [string]$j.font.name } else { 'Consolas' }
+        FontSize = if ($j.font.size) { [double]$j.font.size } else { 13 }
         Separator = if ($j.separator) { [string]$j.separator } else { '=' }
         CloseOnFocusLost = if ($null -ne $j.closeOnFocusLost) { [bool]$j.closeOnFocusLost } else { $true }
-        Footer   = if ($j.footer) { [string]$j.footer } else { '' }
-        Bg     = & $col $j.colors.background @(24,24,28)
-        Fg     = & $col $j.colors.foreground @(210,210,214)
-        Accent = & $col $j.colors.accent @(96,230,150)
-        Border = & $col $j.colors.border @(96,230,150)
-        Grid   = $cells
-        Rows   = $rows
-        Cols   = $cols
+        Footer = if ($j.footer) { [string]$j.footer } else { '' }
+        Bg = & $hex $j.colors.background '#181820'
+        Fg = & $hex $j.colors.foreground '#D2D2D6'
+        Accent = & $hex $j.colors.accent '#60E696'
+        Border = & $hex $j.colors.border '#60E696'
+        Rows = $rows; Cols = $cols; Cells = $cells
     }
 }
-$cfg = Import-Config -Path $configPath
+$cfg = Get-Cfg
 
-# --- Parse du hotkey ("Ctrl+Alt+W" -> modificateurs + code touche) ---
-function ConvertTo-Hotkey {
-    param([string]$s)
+L "config lue : grille $($cfg.Rows)x$($cfg.Cols), $($cfg.Cells.Count) cellules"
+
+# --- Couleurs WPF ---
+function Brush([string]$hex) {
+    [System.Windows.Media.SolidColorBrush]::new(
+        [System.Windows.Media.ColorConverter]::ConvertFromString($hex))
+}
+$brBg     = Brush $cfg.Bg
+$brFg     = Brush $cfg.Fg
+$brAccent = Brush $cfg.Accent
+$brBorder = Brush $cfg.Border
+$brFoot   = Brush '#9696A0'
+$fontFamily = [System.Windows.Media.FontFamily]::new($cfg.FontName)
+
+# --- Fenetre WPF sans bords ---
+$win = New-Object System.Windows.Window
+$win.WindowStyle = 'None'
+$win.ResizeMode  = 'NoResize'
+$win.AllowsTransparency = $true
+$win.Background  = 'Transparent'
+$win.ShowInTaskbar = $false
+$win.Topmost     = $true
+$win.SizeToContent = 'WidthAndHeight'
+$win.WindowStartupLocation = 'Manual'
+
+# Bordure + fond
+$root = New-Object System.Windows.Controls.Border
+$root.Background = $brBg
+$root.BorderBrush = $brBorder
+$root.BorderThickness = 1
+$root.Padding = 24
+$root.CornerRadius = 8
+$win.Content = $root
+
+$outer = New-Object System.Windows.Controls.StackPanel
+$root.Child = $outer
+
+# --- La grille ---
+$grid = New-Object System.Windows.Controls.Grid
+for ($c = 0; $c -lt $cfg.Cols; $c++) {
+    $cd = New-Object System.Windows.Controls.ColumnDefinition
+    $cd.Width = 'Auto'
+    $grid.ColumnDefinitions.Add($cd)
+}
+for ($r = 0; $r -lt $cfg.Rows; $r++) {
+    $rd = New-Object System.Windows.Controls.RowDefinition
+    $rd.Height = 'Auto'
+    $grid.RowDefinitions.Add($rd)
+}
+
+$sep = $cfg.Separator
+foreach ($cell in $cfg.Cells) {
+    if ($cell.Row -ge $cfg.Rows -or $cell.Col -ge $cfg.Cols) { continue }
+    $sp = New-Object System.Windows.Controls.StackPanel
+    $sp.Margin = '0,0,46,22'
+
+    if ($cell.Title) {
+        $t = New-Object System.Windows.Controls.TextBlock
+        $t.Text = $cell.Title
+        $t.Foreground = $brAccent
+        $t.FontFamily = $fontFamily
+        $t.FontSize = $cfg.FontSize + 2
+        $t.FontWeight = 'Bold'
+        $t.Margin = '0,0,0,8'
+        [void]$sp.Children.Add($t)
+    }
+
+    foreach ($item in $cell.Items) {
+        $line = New-Object System.Windows.Controls.TextBlock
+        $line.FontFamily = $fontFamily
+        $line.FontSize = $cfg.FontSize
+        $line.Margin = '0,0,0,5'
+        $idx = $item.IndexOf($sep)
+        if ($idx -ge 0) {
+            $key = $item.Substring(0, $idx).TrimEnd()
+            $act = $item.Substring($idx + $sep.Length).TrimStart()
+            $rk = New-Object System.Windows.Documents.Run($key + '  ')
+            $rk.Foreground = $brAccent
+            $rk.FontWeight = 'Bold'
+            $ra = New-Object System.Windows.Documents.Run($act)
+            $ra.Foreground = $brFg
+            [void]$line.Inlines.Add($rk)
+            [void]$line.Inlines.Add($ra)
+        } else {
+            $line.Text = $item
+            $line.Foreground = $brFg
+        }
+        [void]$sp.Children.Add($line)
+    }
+
+    [System.Windows.Controls.Grid]::SetRow($sp, $cell.Row)
+    [System.Windows.Controls.Grid]::SetColumn($sp, $cell.Col)
+    [void]$grid.Children.Add($sp)
+}
+[void]$outer.Children.Add($grid)
+
+# --- Footer ---
+if ($cfg.Footer) {
+    $f = New-Object System.Windows.Controls.TextBlock
+    $f.Text = $cfg.Footer
+    $f.Foreground = $brFoot
+    $f.FontFamily = $fontFamily
+    $f.FontSize = [Math]::Max(9, $cfg.FontSize - 3)
+    $f.FontStyle = 'Italic'
+    $f.Margin = '0,6,0,0'
+    [void]$outer.Children.Add($f)
+}
+
+L 'fenetre WPF construite'
+
+# --- Parse hotkey ---
+function ConvertTo-Hotkey([string]$s) {
     $mods = 0; $vk = 0
     foreach ($p in ($s -split '\+')) {
         $t = $p.Trim().ToLower()
         if     ($t -eq 'ctrl' -or $t -eq 'control') { $mods = $mods -bor 2 }
-        elseif ($t -eq 'alt')                       { $mods = $mods -bor 1 }
-        elseif ($t -eq 'shift')                     { $mods = $mods -bor 4 }
-        elseif ($t -eq 'win')                       { $mods = $mods -bor 8 }
+        elseif ($t -eq 'alt')   { $mods = $mods -bor 1 }
+        elseif ($t -eq 'shift') { $mods = $mods -bor 4 }
+        elseif ($t -eq 'win')   { $mods = $mods -bor 8 }
         else {
             $k = $p.Trim().ToUpper()
             if ($k -eq 'SPACE') { $vk = 0x20 }
@@ -148,189 +201,88 @@ function ConvertTo-Hotkey {
             elseif ($k -match '^F([1-9]|1[0-2])$') { $vk = 0x70 + [int]$k.Substring(1) - 1 }
         }
     }
-    $mods = $mods -bor 0x4000   # MOD_NOREPEAT
-    @{ Mods = [uint32]$mods; Vk = [uint32]$vk }
+    @{ Mods = ($mods -bor 0x4000); Vk = $vk }
 }
 
-# --- Polices et couleurs ---
-$bodyFont  = New-Object System.Drawing.Font($cfg.FontName, [single]$cfg.FontSize, [System.Drawing.FontStyle]::Regular)
-$keyFont   = New-Object System.Drawing.Font($cfg.FontName, [single]$cfg.FontSize, [System.Drawing.FontStyle]::Bold)
-$titleFont = New-Object System.Drawing.Font($cfg.FontName, [single]($cfg.FontSize + 2), [System.Drawing.FontStyle]::Bold)
-$footFont  = New-Object System.Drawing.Font($cfg.FontName, [single]([Math]::Max(8, $cfg.FontSize - 2)), [System.Drawing.FontStyle]::Italic)
-$colBg     = [System.Drawing.Color]::FromArgb($cfg.Bg[0],$cfg.Bg[1],$cfg.Bg[2])
-$colFg     = [System.Drawing.Color]::FromArgb($cfg.Fg[0],$cfg.Fg[1],$cfg.Fg[2])
-$colAccent = [System.Drawing.Color]::FromArgb($cfg.Accent[0],$cfg.Accent[1],$cfg.Accent[2])
-$colBorder = [System.Drawing.Color]::FromArgb($cfg.Border[0],$cfg.Border[1],$cfg.Border[2])
-$brushFg     = New-Object System.Drawing.SolidBrush ($colFg)
-$brushKey    = New-Object System.Drawing.SolidBrush ($colAccent)
-$brushTitle  = New-Object System.Drawing.SolidBrush ($colAccent)
-$brushFoot   = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(150,150,156))
-$penBorder   = New-Object System.Drawing.Pen ($colBorder, 1)
-
-# --- Helper : couper un item "touche = action" en (key, action) ---
-function Split-Item {
-    param([string]$text)
-    $sep = $cfg.Separator
-    $idx = $text.IndexOf($sep)
-    if ($idx -lt 0) { return @{ Key=$text; Action='' } }
-    @{ Key = $text.Substring(0, $idx).TrimEnd(); Action = $text.Substring($idx + $sep.Length).TrimStart() }
+# --- Fenetre-message C# qui capte le hotkey global (pattern eprouve) ---
+Add-Type -ReferencedAssemblies System.Windows.Forms -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+using System.Windows.Forms;
+public class QuickRefHotkey : NativeWindow {
+    [DllImport("user32.dll")] public static extern bool RegisterHotKey(IntPtr hWnd, int id, uint mod, uint vk);
+    [DllImport("user32.dll")] public static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+    public const int WM_HOTKEY = 0x0312;
+    public event Action Pressed;
+    public QuickRefHotkey() { this.CreateHandle(new CreateParams()); }
+    protected override void WndProc(ref Message m) {
+        if (m.Msg == WM_HOTKEY && Pressed != null) { Pressed(); }
+        base.WndProc(ref m);
+    }
+    public bool Register(uint mod, uint vk) { return RegisterHotKey(this.Handle, 1, mod, vk); }
+    public void Unregister() { UnregisterHotKey(this.Handle, 1); }
 }
+'@
 
-# --- Mesures de base ---
-$measure = [System.Drawing.Graphics]::FromImage((New-Object System.Drawing.Bitmap 1,1))
-function Measure-W { param($t,$f) [int][Math]::Ceiling($measure.MeasureString($t, $f).Width) }
-$lineH  = [int]$bodyFont.GetHeight()
-$titleH = [int]$titleFont.GetHeight()
-$footH  = if ($cfg.Footer) { [int]$footFont.GetHeight() + 8 } else { 0 }
-$bigGap = [int]($lineH * 0.7)
-$keySpace = Measure-W '  ' $keyFont   # espace entre touche et action
-
-# --- Calcul du layout de la grille (une fois) ---
-$rows = [int]$cfg.Rows; $cols = [int]$cfg.Cols
-$colW = New-Object 'int[]' $cols
-$rowH = New-Object 'int[]' $rows
-foreach ($cell in $cfg.Grid) {
-    $r = [int]$cell.Row; $c = [int]$cell.Col
-    if ($r -ge $rows -or $c -ge $cols -or $r -lt 0 -or $c -lt 0) { continue }
-    # largeur cellule
-    $w = Measure-W $cell.Title $titleFont
-    foreach ($it in $cell.Items) {
-        $parts = Split-Item $it
-        $iw = (Measure-W $parts.Key $keyFont) + $keySpace + (Measure-W $parts.Action $bodyFont)
-        if ($iw -gt $w) { $w = $iw }
-    }
-    if ($w -gt $colW[$c]) { $colW[$c] = $w }
-    # hauteur cellule
-    $h = $titleH + $bigGap + ($cell.Items.Count * ($lineH + $cfg.LineSpacing))
-    if ($cell.Items.Count -gt 0) { $h -= $cfg.LineSpacing }
-    if ($h -gt $rowH[$r]) { $rowH[$r] = $h }
-}
-$measure.Dispose()
-
-$pad = $cfg.Padding
-$sumColW = 0; for ($i=0; $i -lt $cols; $i++) { $sumColW += $colW[$i] }
-$sumRowH = 0; for ($i=0; $i -lt $rows; $i++) { $sumRowH += $rowH[$i] }
-$winW = $pad * 2 + $sumColW + ($cfg.ColGap * [Math]::Max(0, $cols - 1))
-$winH = $pad * 2 + $sumRowH + ($cfg.RowGap * [Math]::Max(0, $rows - 1)) + $footH
-
-# origines de colonnes/lignes (precalcul)
-$colX = New-Object 'int[]' $cols
-$rowY = New-Object 'int[]' $rows
-$acc = $pad; for ($i=0; $i -lt $cols; $i++) { $colX[$i] = $acc; $acc += $colW[$i] + $cfg.ColGap }
-$acc = $pad; for ($i=0; $i -lt $rows; $i++) { $rowY[$i] = $acc; $acc += $rowH[$i] + $cfg.RowGap }
-
-# --- Fenetre HUD (pre-construite, masquee) ---
-$hud = New-Object System.Windows.Forms.Form
-$hud.Text            = 'quickref-hud'
-$hud.FormBorderStyle = 'None'
-$hud.StartPosition   = 'Manual'
-$hud.ShowInTaskbar   = $false
-$hud.TopMost         = $true
-$hud.KeyPreview      = $true
-$hud.BackColor       = $colBg
-$hud.ClientSize      = New-Object System.Drawing.Size($winW, $winH)
-
-$panel = New-Object System.Windows.Forms.Panel
-$panel.Dock = 'Fill'
-$panel.GetType().GetProperty('DoubleBuffered',[Reflection.BindingFlags]'Instance,NonPublic').SetValue($panel,$true)
-$hud.Controls.Add($panel)
-
-$panel.Add_Paint({
-    param($s,$e)
-    $g = $e.Graphics
-    $g.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::AntiAlias
-    $g.Clear($colBg)
-    foreach ($cell in $cfg.Grid) {
-        $r = [int]$cell.Row; $c = [int]$cell.Col
-        if ($r -ge $rows -or $c -ge $cols -or $r -lt 0 -or $c -lt 0) { continue }
-        $x = $colX[$c]; $y = $rowY[$r]
-        # titre de cellule
-        if ($cell.Title) { $g.DrawString($cell.Title, $titleFont, $brushTitle, [single]$x, [single]$y) }
-        $yy = $y + $titleH + $bigGap
-        foreach ($it in $cell.Items) {
-            $parts = Split-Item $it
-            $g.DrawString($parts.Key, $keyFont, $brushKey, [single]$x, [single]$yy)
-            if ($parts.Action) {
-                $kw = (Measure-W $parts.Key $keyFont) + $keySpace
-                $g.DrawString($parts.Action, $bodyFont, $brushFg, [single]($x + $kw), [single]$yy)
-            }
-            $yy += $lineH + $cfg.LineSpacing
-        }
-    }
-    if ($cfg.Footer) {
-        $g.DrawString($cfg.Footer, $footFont, $brushFoot, [single]$pad, [single]($panel.Height - $footH + 2))
-    }
-    $g.DrawRectangle($penBorder, 0, 0, $panel.Width - 1, $panel.Height - 1)
-}.GetNewClosure())
-
-# Etat partage (anti-fermeture parasite juste apres l'ouverture)
-$state = @{ shownAt = 0 }
-
-# --- Placement : ecran de la souris, sans recouvrir le curseur ---
+# --- Placement sans recouvrir le curseur ---
 function Move-AwayFromCursor {
-    $cur = [System.Windows.Forms.Cursor]::Position
-    $wa = [System.Windows.Forms.Screen]::FromPoint($cur).WorkingArea
+    $pt = [System.Windows.Forms.Cursor]::Position
+    $scr = [System.Windows.Forms.Screen]::FromPoint($pt).WorkingArea
+    $w = $win.ActualWidth; $h = $win.ActualHeight
+    if ($w -le 0) { $w = 600 }; if ($h -le 0) { $h = 300 }
     $m = 16
-    $cx = $wa.X + [int](($wa.Width - $winW)/2)
-    $cy = $wa.Y + [int](($wa.Height - $winH)/2)
+    $cx = $scr.X + [int](($scr.Width - $w)/2)
+    $cy = $scr.Y + [int](($scr.Height - $h)/2)
     $cands = @(
-        @{X=$cx;Y=$cy},
-        @{X=$wa.X+$m;Y=$wa.Y+$m},
-        @{X=$wa.Right-$winW-$m;Y=$wa.Y+$m},
-        @{X=$wa.X+$m;Y=$wa.Bottom-$winH-$m},
-        @{X=$wa.Right-$winW-$m;Y=$wa.Bottom-$winH-$m}
+        @{X=$cx;Y=$cy}, @{X=$scr.X+$m;Y=$scr.Y+$m},
+        @{X=$scr.Right-$w-$m;Y=$scr.Y+$m},
+        @{X=$scr.X+$m;Y=$scr.Bottom-$h-$m},
+        @{X=$scr.Right-$w-$m;Y=$scr.Bottom-$h-$m}
     )
-    $chosen = $cands[0]
+    $ch = $cands[0]
     foreach ($c in $cands) {
-        $in = ($cur.X -ge $c.X) -and ($cur.X -le ($c.X+$winW)) -and ($cur.Y -ge $c.Y) -and ($cur.Y -le ($c.Y+$winH))
-        if (-not $in) { $chosen = $c; break }
+        $in = ($pt.X -ge $c.X) -and ($pt.X -le ($c.X+$w)) -and ($pt.Y -ge $c.Y) -and ($pt.Y -le ($c.Y+$h))
+        if (-not $in) { $ch = $c; break }
     }
-    $hud.Left = $chosen.X; $hud.Top = $chosen.Y
+    $win.Left = $ch.X; $win.Top = $ch.Y
 }
+Add-Type -AssemblyName System.Windows.Forms
 
-# --- Toggle (appele par le hotkey) : Show/Hide, instantane ---
+# --- Etat + toggle ---
+$state = @{ shownAt = 0 }
 $toggle = {
-    if ($hud.Visible) {
-        $hud.Hide()
+    if ($win.IsVisible) {
+        $win.Hide()
     } else {
+        $win.Show()
         Move-AwayFromCursor
         $state.shownAt = [Environment]::TickCount
-        $hud.Show()
-        $hud.BringToFront()
-        $hud.Activate()
+        $win.Activate()
     }
 }.GetNewClosure()
 
-# --- Masquage : Echap, clic, perte de focus ---
-$hideIt = { $hud.Hide() }.GetNewClosure()
-$hud.Add_KeyDown({ param($s,$e) if ($e.KeyCode -eq [System.Windows.Forms.Keys]::Escape) { $hud.Hide() } }.GetNewClosure())
-$panel.Add_Click($hideIt)
-$hud.Add_Click($hideIt)
+# --- Fermeture : Echap, clic, perte de focus ---
+$win.Add_KeyDown({ if ($_.Key -eq 'Escape') { $win.Hide() } }.GetNewClosure())
+$win.Add_MouseDown({ $win.Hide() }.GetNewClosure())
 if ($cfg.CloseOnFocusLost) {
-    $hud.Add_Deactivate({
-        if (([Environment]::TickCount - $state.shownAt) -gt 300) { $hud.Hide() }
+    $win.Add_Deactivated({
+        if (([Environment]::TickCount - $state.shownAt) -gt 300) { $win.Hide() }
     }.GetNewClosure())
 }
-$hud.Add_FormClosing({
-    param($s,$e)
-    if ($e.CloseReason -eq [System.Windows.Forms.CloseReason]::UserClosing) { $e.Cancel = $true; $hud.Hide() }
-}.GetNewClosure())
 
-# Forcer la creation du handle + 1er rendu hors ecran (1er Show instantane).
-$hud.Left = -32000; $hud.Top = -32000
-$hud.Show(); $hud.Hide()
+# Construire le layout une fois hors ecran pour un 1er affichage instantane.
+$win.Left = -32000; $win.Top = -32000
+$win.Show(); $win.Hide()
 
-# --- Enregistrement du hotkey global ---
+# --- Hotkey global : la fenetre-message C# appelle $toggle a chaque appui ---
 $hk = New-Object QuickRefHotkey
 $hk.add_Pressed($toggle)
-$parts = ConvertTo-Hotkey $cfg.Hotkey
-$ok = $hk.Register($parts.Mods, $parts.Vk)
-L ("hotkey '$($cfg.Hotkey)' (mods=$($parts.Mods) vk=$($parts.Vk)) register=$ok grille=$($cfg.Rows)x$($cfg.Cols) cellules=$($cfg.Grid.Count) taille=${winW}x${winH}")
-if (-not $ok) { L "ECHEC RegisterHotKey : combinaison probablement deja prise par une autre app." }
+$p = ConvertTo-Hotkey $cfg.Hotkey
+$ok = $hk.Register([uint32]$p.Mods, [uint32]$p.Vk)
+L "hotkey '$($cfg.Hotkey)' mods=$($p.Mods) vk=$($p.Vk) register=$ok"
 
-# --- Boucle de messages ---
-$ctx = New-Object System.Windows.Forms.ApplicationContext
-[System.Windows.Forms.Application]::Run($ctx)
+# --- Boucle de messages WPF (pompe aussi les messages de la fenetre-message) ---
+[System.Windows.Threading.Dispatcher]::Run()
 
 try { $hk.Unregister() } catch {}
 try { $mutex.ReleaseMutex() } catch {}

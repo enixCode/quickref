@@ -2,7 +2,7 @@
 
 Un aide-mémoire en surimpression : une touche affiche une fenêtre sans bords avec une **grille de raccourcis**, la même touche la referme. Idéal pour garder tes raccourcis VSCode + Vim à portée de main sans qu'ils encombrent l'écran.
 
-100% standard Windows : PowerShell + WinForms. Rien à installer d'autre.
+100% standard Windows : PowerShell + WPF (inclus dans Windows). Rien à installer d'autre. Le moteur de grille natif de WPF (`<Grid>`) gère la mise en page, donc l'affichage est fiable.
 
 - **Grille configurable** : tu choisis dans `config.json` combien de lignes et de colonnes, et ce que contient chaque case.
 - **Auto-style** : dans chaque raccourci, la **touche** (avant le `=`) s'affiche en couleur d'accent, l'**action** en gris. Lisible d'un coup d'œil.
@@ -126,16 +126,16 @@ quickref/
 ├─ VERSION                 version (semver), base de l'auto-update
 ├─ .gitignore
 └─ src/
-   ├─ Show-QuickRef.ps1     le resident : hotkey natif, moteur de grille, toggle
+   ├─ Show-QuickRef.ps1     le resident : fenetre WPF, grille native, hotkey, toggle
    └─ AutoUpdate.ps1        verifie GitHub au demarrage et se met a jour seul
 ```
 
 ### Comment ça marche
 
-- `src/Show-QuickRef.ps1` tourne en fond. Il lit la grille du `config.json`, calcule la mise en page (largeur de chaque colonne, hauteur de chaque ligne) une fois, et garde une fenêtre prête, masquée.
-- Il enregistre la touche globale via `RegisterHotKey`. À l'appui : **Afficher / Masquer** → instantané.
+- `src/Show-QuickRef.ps1` tourne en fond. Il lit la grille du `config.json` et construit une fenêtre **WPF** : un `<Grid>` avec une colonne/ligne par cellule, WPF gère la mise en page tout seul (pas de calcul pixel, pas de crash de layout).
+- Une fenêtre-message C# capte la touche globale via `RegisterHotKey`. À l'appui : **Afficher / Masquer** la fenêtre WPF → instantané.
 - Au démarrage, `AutoUpdate.ps1` vérifie GitHub et se met à jour si besoin.
-- `Start-QuickRef.vbs` le démarre sans console, en `-Sta` (requis WinForms).
+- `Start-QuickRef.vbs` le démarre sans console.
 
 ## Prérequis
 
