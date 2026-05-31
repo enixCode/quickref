@@ -6,7 +6,7 @@
   "lineSpacing": 7,
   "separator": "=",
   "closeOnFocusLost": true,
-  "footer": "Echap pour fermer   |   doc complete : github.com/enixCode/quickref",
+  "footer": "Echap pour fermer   |   statique + synchro keybindings.json   |   doc : github.com/enixCode/quickref",
   "colors": {
     "background": [24, 24, 28],
     "foreground": [210, 210, 214],
@@ -20,11 +20,22 @@
     "rowGap": 22,
     "cells": [
       {
-        "row": 0, "col": 0, "title": "NAVIGATION",
+        "row": 0, "col": 0, "title": "VSCODE (synchro auto)",
+        "items": [
+          "-- lus depuis ton keybindings.json --"
+        ],
+        "source": {
+          "file": "%APPDATA%/Code/User/keybindings.json",
+          "regex": "\"key\"\\s*:\\s*\"([^\"]+)\"\\s*,\\s*\"command\"\\s*:\\s*\"([^\"]+)\"",
+          "key": 1, "action": 2,
+          "limit": 8
+        }
+      },
+      {
+        "row": 0, "col": 1, "title": "FICHIERS & RECHERCHE",
         "items": [
           "Ctrl+P = ouvrir un fichier",
           "Ctrl+Shift+P = palette de commandes",
-          "Ctrl+Shift+E = explorateur",
           "Ctrl+Shift+F = recherche projet",
           "Ctrl+Tab = fichier suivant",
           "Ctrl+B = afficher/cacher sidebar",
@@ -32,26 +43,14 @@
         ]
       },
       {
-        "row": 0, "col": 1, "title": "EDITION",
-        "items": [
-          "Alt+Haut / Bas = deplacer la ligne",
-          "Shift+Alt+Bas = dupliquer la ligne",
-          "Ctrl+/ = commenter",
-          "F2 = renommer le symbole",
-          "Ctrl+D = occurrence suivante",
-          "Ctrl+Shift+L = toutes les occurrences",
-          "Alt+Clic = multi-curseur"
-        ]
-      },
-      {
         "row": 0, "col": 2, "title": "PANNEAUX",
         "items": [
-          "Ctrl+Shift+J = terminal",
-          "Ctrl+\\ = diviser l'editeur",
           "Ctrl+1 / 2 = groupe d'editeurs",
-          "Ctrl+W = fermer l'onglet",
           "Ctrl+K Z = mode zen",
-          "Ctrl+, = parametres"
+          "Ctrl+, = parametres",
+          "F11 = plein ecran",
+          "F2 = renommer le symbole",
+          "Ctrl+/ = commenter"
         ]
       },
       {
@@ -77,11 +76,11 @@
         ]
       },
       {
-        "row": 1, "col": 2, "title": "VIM SELECTION",
+        "row": 1, "col": 2, "title": "VIM SELECTION & RECHERCHE",
         "items": [
           "v / V = visuel / visuel ligne",
           "gd = aller a la definition",
-          "/texte = chercher",
+          "/texte + Entree = chercher",
           "n / N = occurrence suiv / prec",
           ":w = sauvegarder",
           "Echap = mode normal"

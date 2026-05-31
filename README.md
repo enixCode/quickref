@@ -97,9 +97,41 @@ La grille se définit par un nombre de lignes (`rows`) et colonnes (`cols`), et 
 |---|---|
 | `rows` / `cols` | nombre de lignes et de colonnes |
 | `colGap` / `rowGap` | espacement entre colonnes / entre lignes (px) |
-| `cells` | liste des cases ; chaque case a `row`, `col`, `title`, et `items` (les raccourcis) |
+| `cells` | liste des cases ; chaque case a `row`, `col`, `title`, et `items` (statiques) et/ou `source`/`sources` (dynamiques) |
 
 La fenêtre se dimensionne automatiquement au contenu. Une case vide (aucune `cell` à cette position) laisse juste un espace.
+
+### Sources dynamiques (synchro avec ta config, agnostique de l'IDE)
+
+Une case peut afficher des lignes **lues automatiquement d'un fichier** (ton `keybindings.json` VSCode, un `.vim`, un `.toml`, n'importe quoi). Tu modifies ta config IDE, la cheatsheet se met à jour toute seule. Aucun nom d'IDE n'est câblé dans le code : tout passe par un fichier + une regex, donc si tu changes d'éditeur, tu changes juste `file` et `regex`.
+
+Dans une case, les `items` statiques s'affichent **d'abord**, puis les lignes extraites des `sources`. Tu gardes donc tes ajouts perso au-dessus du contenu synchronisé.
+
+```json
+{
+  "row": 0, "col": 0, "title": "VSCODE (synchro auto)",
+  "items": [ "-- mes notes perso = ici --" ],
+  "source": {
+    "file": "%APPDATA%/Code/User/keybindings.json",
+    "regex": "\"key\"\\s*:\\s*\"([^\"]+)\"\\s*,\\s*\"command\"\\s*:\\s*\"([^\"]+)\"",
+    "key": 1,
+    "action": 2,
+    "limit": 8
+  }
+}
+```
+
+| Clé de `source` | Rôle |
+|---|---|
+| `file` | chemin du fichier source. `%VARIABLES%` Windows et `~` sont résolus |
+| `regex` | expression régulière avec des groupes de capture (échapper `\` en `\\` et `"` en `\"` dans le JSON) |
+| `key` | numéro du groupe capturé qui donne la **touche** (défaut `1`) |
+| `action` | numéro du groupe capturé qui donne l'**action** (défaut `2`) |
+| `sep` | séparateur affiché entre touche et action (défaut : celui de la grille) |
+| `limit` | nombre maximum de lignes extraites (défaut : aucune limite) |
+| `ignoreCase` | regex insensible à la casse (défaut `true`) |
+
+Pour plusieurs sources dans une même case, utilise `"sources": [ {...}, {...} ]` au lieu de `"source"`.
 
 ## Keychron
 

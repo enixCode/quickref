@@ -33,6 +33,51 @@ if ($env:QUICKREF_SKIP_UPDATE -ne '1') {
     } catch {}
 }
 
+# --- Sources dynamiques : lire un fichier + extraire (touche, action) par regex ---
+# Agnostique : marche pour keybindings.json (VSCode), un .vim, un .toml, n'importe quel format.
+function Expand-QrPath {
+    param([string]$p)
+    if (-not $p) { return $p }
+    # Variables Windows %VAR% et ~ -> dossier utilisateur.
+    $p = [System.Environment]::ExpandEnvironmentVariables($p)
+    if ($p.StartsWith('~')) { $p = Join-Path $env:USERPROFILE ($p.Substring(1).TrimStart('/','\')) }
+    # Normaliser les slashs avant en backslashs (sinon Test-Path echoue sur certains chemins).
+    $p = $p -replace '/', '\'
+    return $p
+}
+
+function Get-SourceItems {
+    # $src : objet {file, regex, key, action, sep, limit, ignoreCase}
+    # Retourne un tableau de chaines "touche = action" (avec le separateur de la cellule).
+    param($src, [string]$cellSep)
+    $out = @()
+    try {
+        $file = Expand-QrPath ([string]$src.file)
+        if (-not (Test-Path -LiteralPath $file)) { return @("(source introuvable : $([System.IO.Path]::GetFileName($file)))") }
+        $text = [System.Text.Encoding]::UTF8.GetString([System.IO.File]::ReadAllBytes($file))
+        $pattern = [string]$src.regex
+        if (-not $pattern) { return @('(regex manquante)') }
+        $opts = [System.Text.RegularExpressions.RegexOptions]::Singleline
+        if ($null -eq $src.ignoreCase -or [bool]$src.ignoreCase) { $opts = $opts -bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase }
+        $ki = if ($null -ne $src.key) { [int]$src.key } else { 1 }
+        $ai = if ($null -ne $src.action) { [int]$src.action } else { 2 }
+        $sep = if ($src.sep) { [string]$src.sep } else { $cellSep }
+        $limit = if ($null -ne $src.limit) { [int]$src.limit } else { 0 }
+        $matches = [System.Text.RegularExpressions.Regex]::Matches($text, $pattern, $opts)
+        foreach ($m in $matches) {
+            $k = if ($m.Groups.Count -gt $ki) { $m.Groups[$ki].Value.Trim() } else { '' }
+            $a = if ($m.Groups.Count -gt $ai) { $m.Groups[$ai].Value.Trim() } else { '' }
+            if (-not $k) { continue }
+            $out += if ($a) { "$k $sep $a" } else { $k }
+            if ($limit -gt 0 -and $out.Count -ge $limit) { break }
+        }
+        if ($out.Count -eq 0) { return @('(aucune correspondance regex)') }
+    } catch {
+        return @("(erreur source : $($_.Exception.Message))")
+    }
+    return $out
+}
+
 # --- Lecture config ---
 function Get-Cfg {
     $def = @{
@@ -48,12 +93,20 @@ function Get-Cfg {
     $hex = { param($v,$d) if ($v -and $v.Count -eq 3) { '#{0:X2}{1:X2}{2:X2}' -f [int]$v[0],[int]$v[1],[int]$v[2] } else { $d } }
     $cells = @()
     $rows = 1; $cols = 1
+    $cellSep = if ($j.separator) { [string]$j.separator } else { '=' }
     if ($j.grid -and $j.grid.cells) {
         foreach ($c in $j.grid.cells) {
+            # 1) items statiques ecrits a la main
+            $items = @(if ($c.items) { $c.items | ForEach-Object { [string]$_ } })
+            # 2) sources dynamiques lues d'un fichier (concatenees apres les items)
+            $srcList = @()
+            if ($c.sources) { $srcList = @($c.sources) }
+            elseif ($c.source) { $srcList = @($c.source) }
+            foreach ($s in $srcList) { $items += Get-SourceItems -src $s -cellSep $cellSep }
             $cells += @{
                 Row=[int]$c.row; Col=[int]$c.col
                 Title=[string]$c.title
-                Items=@(if ($c.items) { $c.items | ForEach-Object { [string]$_ } })
+                Items=@($items)
             }
         }
         $rows = if ($j.grid.rows) { [int]$j.grid.rows } else { (($cells.Row | Measure-Object -Maximum).Maximum + 1) }
