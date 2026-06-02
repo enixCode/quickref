@@ -20,6 +20,9 @@ Add-Type -AssemblyName WindowsBase
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $root = Split-Path -Parent $here
 $configPath = Join-Path $root 'config.json'
+# Version locale (affichee en bas a droite). $root est reaffecte plus bas, on la capture maintenant.
+$qrVersion = ''
+try { $qrVersion = (Get-Content (Join-Path $root 'VERSION') -Raw).Trim() } catch {}
 if ($env:QUICKREF_SKIP_UPDATE -ne '1') {
     try {
         . (Join-Path $here 'AutoUpdate.ps1')
@@ -63,10 +66,25 @@ function Get-SourceItems {
         $ai = if ($null -ne $src.action) { [int]$src.action } else { 2 }
         $sep = if ($src.sep) { [string]$src.sep } else { $cellSep }
         $limit = if ($null -ne $src.limit) { [int]$src.limit } else { 0 }
+        # Regles de remplacement (find -> to), appliquees dans l'ordre a la touche ET a l'action.
+        # Definies dans config.json (donc controlees par l'utilisateur, rien de cable dans le code).
+        $rules = @()
+        if ($src.replace) { $rules = @($src.replace) }
+        $applyRules = {
+            param([string]$txt)
+            foreach ($r in $rules) {
+                if ($null -ne $r.find) {
+                    $to = if ($null -ne $r.to) { [string]$r.to } else { '' }
+                    $txt = [System.Text.RegularExpressions.Regex]::Replace($txt, [string]$r.find, $to)
+                }
+            }
+            return $txt.Trim()
+        }
         $matches = [System.Text.RegularExpressions.Regex]::Matches($text, $pattern, $opts)
         foreach ($m in $matches) {
             $k = if ($m.Groups.Count -gt $ki) { $m.Groups[$ki].Value.Trim() } else { '' }
             $a = if ($m.Groups.Count -gt $ai) { $m.Groups[$ai].Value.Trim() } else { '' }
+            if ($rules.Count -gt 0) { $k = & $applyRules $k; $a = & $applyRules $a }
             if (-not $k) { continue }
             $out += if ($a) { "$k $sep $a" } else { $k }
             if ($limit -gt 0 -and $out.Count -ge $limit) { break }
@@ -235,6 +253,18 @@ if ($cfg.Footer) {
     $f.FontStyle = 'Italic'
     $f.Margin = '0,6,0,0'
     [void]$outer.Children.Add($f)
+}
+
+# --- Version (bas a droite ; emplacement reserve pour un futur indicateur de mise a jour) ---
+if ($qrVersion) {
+    $ver = New-Object System.Windows.Controls.TextBlock
+    $ver.Text = "v$qrVersion"
+    $ver.Foreground = $brFoot
+    $ver.FontFamily = $fontFamily
+    $ver.FontSize = [Math]::Max(9, $cfg.FontSize - 3)
+    $ver.HorizontalAlignment = 'Right'
+    $ver.Margin = '0,4,0,0'
+    [void]$outer.Children.Add($ver)
 }
 
 L 'fenetre WPF construite'
