@@ -14,21 +14,31 @@
     "border": [96, 230, 150]
   },
   "grid": {
-    "rows": 2,
+    "rows": 3,
     "cols": 3,
     "colGap": 46,
     "rowGap": 22,
     "cells": [
       {
-        "row": 0, "col": 0, "title": "VSCODE (synchro auto)",
-        "items": [
-          "-- lus depuis ton keybindings.json --"
-        ],
+        "row": 0, "col": 0, "title": "VSCODE (keybindings.json)",
         "source": {
           "file": "%APPDATA%/Code/User/keybindings.json",
           "regex": "\"key\"\\s*:\\s*\"([^\"]+)\"\\s*,\\s*\"command\"\\s*:\\s*\"([^\"]+)\"",
           "key": 1, "action": 2,
-          "limit": 8
+          "limit": 8,
+          "replace": [
+            { "find": "workbench\\.action\\.terminal\\.toggleTerminal", "to": "terminal" },
+            { "find": "workbench\\.action\\.terminal\\.sendSequence", "to": "envoyer touche" },
+            { "find": "workbench\\.action\\.navigateLeft", "to": "zone gauche" },
+            { "find": "workbench\\.action\\.navigateRight", "to": "zone droite" },
+            { "find": "workbench\\.action\\.navigateUp", "to": "zone haut" },
+            { "find": "workbench\\.action\\.navigateDown", "to": "zone bas" },
+            { "find": "workbench\\.view\\.explorer", "to": "explorateur" },
+            { "find": "workbench\\.action\\.nextWindow", "to": "fenetre suivante" },
+            { "find": "workbench\\.action\\.previousWindow", "to": "fenetre precedente" },
+            { "find": "workbench\\.action\\.", "to": "" },
+            { "find": "workbench\\.view\\.", "to": "" }
+          ]
         }
       },
       {
@@ -76,15 +86,39 @@
         ]
       },
       {
-        "row": 1, "col": 2, "title": "VIM SELECTION & RECHERCHE",
+        "row": 1, "col": 2, "title": "RECHERCHE / REMPLACER",
         "items": [
-          "v / V = visuel / visuel ligne",
-          "gd = aller a la definition",
-          "/texte + Entree = chercher",
-          "n / N = occurrence suiv / prec",
-          ":w = sauvegarder",
-          "Echap = mode normal"
+          "/texte = chercher (bas)",
+          "n / N = suivant / precedent",
+          "* / # = mot sous curseur",
+          ":s/a/b/g = remplacer la ligne",
+          ":%s/a/b/g = remplacer tout le fichier",
+          ":%s/a/b/gc = remplacer + confirmer",
+          "Ctrl+Shift+H = remplacer multi-fichiers"
         ]
+      },
+      {
+        "row": 2, "col": 0, "title": "VIM <C-w> (settings.json)",
+        "source": {
+          "file": "%APPDATA%/Code/User/settings.json",
+          "regex": "\"before\"\\s*:\\s*\\[([^\\]]+)\\]\\s*,\\s*\"commands\"\\s*:\\s*\\[\\s*\"([^\"]+)\"",
+          "key": 1, "action": 2,
+          "limit": 10,
+          "replace": [
+            { "find": "[\"']", "to": "" },
+            { "find": ",\\s*", "to": " " },
+            { "find": "workbench\\.action\\.navigateLeft", "to": "zone gauche" },
+            { "find": "workbench\\.action\\.navigateRight", "to": "zone droite" },
+            { "find": "workbench\\.action\\.navigateUp", "to": "zone haut" },
+            { "find": "workbench\\.action\\.navigateDown", "to": "zone bas" },
+            { "find": "workbench\\.action\\.splitEditorDown", "to": "split ligne" },
+            { "find": "workbench\\.action\\.splitEditor", "to": "split colonne" },
+            { "find": "workbench\\.action\\.closeActiveEditor", "to": "fermer editeur" },
+            { "find": "workbench\\.view\\.explorer", "to": "explorateur" },
+            { "find": "workbench\\.action\\.", "to": "" },
+            { "find": "workbench\\.view\\.", "to": "" }
+          ]
+        }
       }
     ]
   }
