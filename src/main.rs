@@ -36,6 +36,11 @@ fn main() -> eframe::Result<()> {
     if dev {
         cfg.colors.accent = [255, 165, 0];
         cfg.footer = format!("[ MODE DEV ]    {}", cfg.footer);
+        // Different hotkey (prod + Shift) so the dev instance coexists with the
+        // installed prod one instead of failing to register the same hotkey.
+        if !cfg.hotkey.to_lowercase().contains("shift") {
+            cfg.hotkey = format!("Shift+{}", cfg.hotkey);
+        }
         version = format!("{} DEV", VERSION);
     }
     run_resident(cfg, version)
