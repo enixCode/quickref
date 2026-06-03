@@ -13,6 +13,7 @@ mod config;
 mod install;
 mod positioning;
 mod sources;
+mod updater;
 
 use std::sync::atomic::Ordering;
 
@@ -29,7 +30,15 @@ fn main() -> eframe::Result<()> {
     if !dev {
         install::ensure_default_config();
         install::ensure_autostart();
-        install::spawn_updater();
+        // Auto-update via github.com (pas d'API). Si applique : relance + sort.
+        if std::env::var("QUICKREF_SKIP_UPDATE").is_err() && updater::maybe_update(VERSION) {
+            if let Ok(exe) = std::env::current_exe() {
+                let _ = std::process::Command::new(exe)
+                    .env("QUICKREF_SKIP_UPDATE", "1")
+                    .spawn();
+            }
+            return Ok(());
+        }
     }
     let mut cfg = config::load_config();
     let mut version = VERSION.to_string();

@@ -16,5 +16,6 @@ targets = ["x86_64-pc-windows-msvc"]
 installers = ["powershell"]
 # Path that installers should place binaries in
 install-path = "CARGO_HOME"
-# Whether to install an updater program
-install-updater = true
+# Pas d'updater cargo-dist : l'app se met a jour elle-meme via github.com
+# (voir src/updater.rs), sans api.github.com ni token.
+install-updater = false

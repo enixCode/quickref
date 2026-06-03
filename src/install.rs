@@ -42,16 +42,3 @@ pub fn ensure_autostart() {
     }
 }
 
-/// If <exe-dir>/quickref-update.exe exists, spawn it. Errors are silently ignored.
-pub fn spawn_updater() {
-    let updater = match std::env::current_exe() {
-        Ok(p) => match p.parent() {
-            Some(dir) => dir.join("quickref-update.exe"),
-            None => return,
-        },
-        Err(_) => return,
-    };
-    if updater.exists() {
-        let _ = std::process::Command::new(&updater).spawn();
-    }
-}

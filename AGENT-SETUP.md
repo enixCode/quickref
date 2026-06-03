@@ -50,7 +50,7 @@ ne bloque pas le reste.
 ## Comment quickref fonctionne (pour l'agent)
 
 - Binaire natif Windows unique (`quickref.exe`), sans runtime. GUI : **eframe/egui** (renderer OpenGL `glow`).
-- Au lancement (hors `--dev`), il : **s'inscrit au démarrage automatique** (clé Run `HKCU` -> son propre chemin), écrit une **config par défaut** dans `%APPDATA%\quickref\config.json` si absente, **lance l'updater** (`quickref-update.exe`, fourni par l'installeur, en tâche de fond), puis affiche la grille sur hotkey.
+- Au lancement (hors `--dev`), il : **s'inscrit au démarrage automatique** (clé Run `HKCU` -> son propre chemin), écrit une **config par défaut** dans `%APPDATA%\quickref\config.json` si absente, **vérifie une mise à jour** via github.com (redirection `releases/latest`, sans api.github.com ni token) et se remplace si une version plus récente existe, puis affiche la grille sur hotkey.
 - `main()` : détecte `--dev` ; sinon bootstrap (config + autostart + updater) ; charge la config ; lance `run_resident`.
 - Boucle egui : `App::logic()` (chaque frame, même cachée : hotkey, fermeture, placement Win32) et `App::ui()` (peinture, seulement visible). Un **thread de pompe** réveille la boucle via `request_repaint` à chaque hotkey (réactif même caché, sans busy-loop).
 - La config est lue dans cet ordre : à côté de l'exe, puis `%APPDATA%\quickref\config.json`, puis un défaut embarqué.
@@ -64,9 +64,9 @@ powershell -c "irm https://github.com/enixCode/quickref/releases/latest/download
 quickref
 ```
 
-L'installeur (généré par **dist** / cargo-dist) télécharge le binaire compilé par la CI, l'installe dans `~/.cargo/bin` (sur le PATH) avec son updater. Le 1er `quickref` déclenche l'auto-inscription au démarrage et la config par défaut.
+L'installeur (généré par **dist** / cargo-dist) télécharge le binaire compilé par la CI et l'installe dans `~/.cargo/bin` (sur le PATH). Le 1er `quickref` déclenche l'auto-inscription au démarrage et la config par défaut.
 
-**Mettre à jour** : automatique (l'updater `quickref-update` tourne au démarrage). Pour forcer : lancer `quickref-update`.
+**Mettre à jour** : automatique au démarrage. quickref interroge **github.com** (jamais l'API), compare à la dernière release, télécharge le binaire et se remplace. Marche **sans authentification** et même là où `api.github.com` est bloqué.
 
 **Désinstaller** :
 
@@ -131,7 +131,7 @@ Pour plusieurs sources dans une case : `"sources": [ {...}, {...} ]`.
 - **Toggle debouncé** (250 ms) : sinon la répétition clavier piège l'utilisateur (fenêtre qui ne se ferme plus). Ne pas revenir à une logique de parité.
 - **DPI** : placement (taille/position/rayon) en pixels physiques via Win32.
 - **Version** : `env!("CARGO_PKG_VERSION")` ; bumper = éditer `Cargo.toml` (et le tag de release doit correspondre).
-- **Distribution** : tout passe par **dist** (`dist-workspace.toml` + `.github/workflows/release.yml`). NE PAS coder d'install/update à la main : pousser un tag `vX.Y.Z` -> la CI build et publie la Release (binaire + installeur + updater). L'app ne fait que s'auto-inscrire au démarrage et lancer l'updater.
+- **Distribution** : **dist** (`dist-workspace.toml` + `.github/workflows/release.yml`) build le binaire + l'installeur ; pousser un tag `vX.Y.Z` publie la Release. L'**auto-update** est fait par l'app via **github.com** (`src/updater.rs`), PAS par l'updater cargo-dist (`install-updater = false`) qui dépendrait d'`api.github.com`. L'app s'auto-inscrit au démarrage et se met à jour seule.
 
 ## Carte du code (`src/`)
 
@@ -142,7 +142,8 @@ Pour plusieurs sources dans une case : `"sources": [ {...}, {...} ]`.
 | `config.rs` | structs serde du `config.json`, défauts, `compute_lines` (items + sources). |
 | `sources.rs` | sources dynamiques (lecture fichier + regex + `replace`). |
 | `positioning.rs` | `place_monitor` : taille = écran moins marge, Win32, DPI, coins arrondis. |
-| `install.rs` | bootstrap démarrage : `config_dir` (`%APPDATA%`), `ensure_default_config`, `ensure_autostart` (clé Run), `spawn_updater`. |
+| `install.rs` | bootstrap démarrage : `config_dir` (`%APPDATA%`), `ensure_default_config`, `ensure_autostart` (clé Run). |
+| `updater.rs` | auto-update via github.com (redirection version + téléchargement zip + self-replace), sans API ni token. |
 
 ## Mode dev
 

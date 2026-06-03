@@ -1,6 +1,6 @@
 [package]
 name = "quickref"
-version = "1.4.0"
+version = "1.4.1"
 edition = "2021"
 description = "Aide-memoire en surimpression : une touche affiche une grille de raccourcis plein ecran."
 license = "MIT"
@@ -19,6 +19,10 @@ serde_json = "1"
 regex = "1"
 raw-window-handle = "0.6"
 winreg = "0.52"
+# Auto-update via github.com (pas d'API) : HTTP (TLS Windows natif) + extraction zip + remplacement de l'exe.
+ureq = { version = "2", default-features = false, features = ["native-tls"] }
+self-replace = "1"
+zip = { version = "2", default-features = false, features = ["deflate"] }
 
 [dependencies.windows]
 version = "0.62"
