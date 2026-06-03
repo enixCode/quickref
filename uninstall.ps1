@@ -1,25 +1,18 @@
-#Requires -Version 5
-<#
-  uninstall.ps1
-  Arrete le resident, retire le demarrage auto, supprime %LOCALAPPDATA%\quickref.
-#>
+# quickref : desinstallation.
+# Arrete le resident, retire le demarrage automatique, supprime la config et les binaires.
 $ErrorActionPreference = 'SilentlyContinue'
-Set-Location $env:USERPROFILE
 
-$InstallDir = Join-Path $env:LOCALAPPDATA 'quickref'
-function Write-Step($m) { Write-Host "==> $m" -ForegroundColor Cyan }
+Get-Process -Name 'quickref' | Stop-Process -Force
 
-Write-Step 'Arret du resident'
-Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" |
-    Where-Object { $_.CommandLine -match 'Show-QuickRef\.ps1' } |
-    ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
-Start-Sleep -Milliseconds 400
+# Demarrage automatique.
+Remove-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'quickref'
 
-Write-Step 'Retrait du demarrage auto'
-Remove-Item (Join-Path ([Environment]::GetFolderPath('Startup')) 'quickref.lnk') -Force
+# Config utilisateur.
+Remove-Item -Recurse -Force (Join-Path $env:APPDATA 'quickref')
 
-Write-Step "Suppression de $InstallDir"
-Remove-Item $InstallDir -Recurse -Force
+# Binaires installes par l'installeur dist (~/.cargo/bin).
+$bin = Join-Path $env:USERPROFILE '.cargo\bin'
+Remove-Item -Force (Join-Path $bin 'quickref.exe')
+Remove-Item -Force (Join-Path $bin 'quickref-update.exe')
 
-Write-Host ''
-Write-Host 'quickref desinstalle.' -ForegroundColor Green
+Write-Host "quickref desinstalle."

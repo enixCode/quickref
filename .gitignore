@@ -3,3 +3,6 @@
 /tmp/
 Thumbs.db
 desktop.ini
+
+# Rust
+/target

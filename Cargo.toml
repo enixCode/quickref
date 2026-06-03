@@ -1,0 +1,39 @@
+[package]
+name = "quickref"
+version = "1.4.0"
+edition = "2021"
+description = "Aide-memoire en surimpression : une touche affiche une grille de raccourcis plein ecran."
+license = "MIT"
+repository = "https://github.com/enixCode/quickref"
+
+[[bin]]
+name = "quickref"
+path = "src/main.rs"
+
+[dependencies]
+# Renderer glow (OpenGL) uniquement, pour eviter de compiler wgpu/naga/ash (OOM).
+eframe = { version = "0.34", default-features = false, features = ["glow", "accesskit", "default_fonts"] }
+global-hotkey = "0.8"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+regex = "1"
+raw-window-handle = "0.6"
+winreg = "0.52"
+
+[dependencies.windows]
+version = "0.62"
+features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Graphics_Gdi",
+]
+
+[profile.release]
+opt-level = 1
+lto = false
+codegen-units = 1
+
+# Profil utilise par 'dist' (cargo-dist) pour les builds de release.
+[profile.dist]
+inherits = "release"
+lto = "thin"
